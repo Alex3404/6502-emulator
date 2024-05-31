@@ -1,18 +1,18 @@
 use crate::emulator::*;
 
-pub fn inc_memory(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn inc_memory(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
     let new_value = ((value as u16 + 1) & 0xFF) as u8;
 
     context.flags.zero = new_value == 0;
     context.flags.negative = (new_value & (1 << 7)) != 0;
 
-    write(memory, address, new_value);
+    context.write(address, new_value);
 }
 
 #[allow(unused_variables)]
-pub fn inc_ix(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
+pub fn inc_ix(context: &mut MOS6502, mode: AddressingMode) {
     let new_ix = context.reg.ix + 1;
 
     context.flags.zero = new_ix == 0;
@@ -22,7 +22,7 @@ pub fn inc_ix(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &m
 }
 
 #[allow(unused_variables)]
-pub fn inc_iy(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
+pub fn inc_iy(context: &mut MOS6502, mode: AddressingMode) {
     let new_ix = context.reg.ix + 1;
 
     context.flags.zero = new_ix == 0;
@@ -31,19 +31,19 @@ pub fn inc_iy(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &m
     context.reg.ix = new_ix
 }
 
-pub fn dec_memory(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn dec_memory(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
     let new_value = ((value as u16 - 1) & 0xFF) as u8;
 
     context.flags.zero = new_value == 0;
     context.flags.negative = (new_value & (1 << 7)) != 0;
 
-    write(memory, address, new_value);
+    context.write(address, new_value);
 }
 
 #[allow(unused_variables)]
-pub fn dec_ix(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
+pub fn dec_ix(context: &mut MOS6502, mode: AddressingMode) {
     let new_ix = ((context.reg.ix as u16 - 1) & 0xFF) as u8;
 
     context.flags.zero = new_ix == 0;
@@ -53,7 +53,7 @@ pub fn dec_ix(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &m
 }
 
 #[allow(unused_variables)]
-pub fn dec_iy(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
+pub fn dec_iy(context: &mut MOS6502, mode: AddressingMode) {
     let new_ix = ((context.reg.iy as u16 - 1) & 0xFF) as u8;
 
     context.flags.zero = new_ix == 0;

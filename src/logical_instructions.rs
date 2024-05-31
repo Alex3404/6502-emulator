@@ -1,13 +1,9 @@
 use crate::emulator::*;
 
-pub fn logical_and(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
+pub fn logical_and(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
 
-    let new_accumulator = context.reg.ac & read(memory, address);
+    let new_accumulator = context.reg.ac & context.read(address);
 
     // Flags
     context.flags.zero = new_accumulator == 0;
@@ -17,14 +13,10 @@ pub fn logical_and(
     context.reg.ac = new_accumulator;
 }
 
-pub fn logical_exclusive_or(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
+pub fn logical_exclusive_or(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
 
-    let new_accumulator = context.reg.ac ^ read(memory, address);
+    let new_accumulator = context.reg.ac ^ context.read(address);
 
     // Flags
     context.flags.zero = new_accumulator == 0;
@@ -34,14 +26,10 @@ pub fn logical_exclusive_or(
     context.reg.ac = new_accumulator;
 }
 
-pub fn logical_inclusive_or(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
+pub fn logical_inclusive_or(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
 
-    let new_accumulator = context.reg.ac | read(memory, address);
+    let new_accumulator = context.reg.ac | context.read(address);
 
     // Flags
     context.flags.zero = new_accumulator == 0;
@@ -51,13 +39,9 @@ pub fn logical_inclusive_or(
     context.reg.ac = new_accumulator;
 }
 
-pub fn logical_bit_test(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn logical_bit_test(context: &mut MOS6502, mode: AddressingMode) {
+    let address = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
 
     // Flags
     context.flags.zero = (context.reg.ac & value) == 0;
@@ -65,11 +49,7 @@ pub fn logical_bit_test(
     context.flags.overflow = (value & (1 << 6)) != 0; // 6th bit
 }
 
-pub fn logical_shift_left(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
+pub fn logical_shift_left(context: &mut MOS6502, mode: AddressingMode) {
     // Addressing Mode Accumulator
     if mode == AddressingMode::Accumulator {
         let new_accumulator = context.reg.ac << 1;
@@ -82,9 +62,9 @@ pub fn logical_shift_left(
         // Regs
         context.reg.ac = new_accumulator;
     } else {
-        let address: u16 = fetch_instruction_abs_address(mode, context, memory);
+        let address: u16 = context.fetch_instruction_abs_address(mode);
 
-        let value = read(memory, address);
+        let value = context.read(address);
         let new_value = value << 1;
 
         // Flags
@@ -93,15 +73,11 @@ pub fn logical_shift_left(
         context.flags.negative = (new_value & (1 << 7)) != 0; // If the 7th bit is set
 
         // Store Memory
-        write(memory, address, new_value);
+        context.write(address, new_value);
     }
 }
 
-pub fn logical_shift_right(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
+pub fn logical_shift_right(context: &mut MOS6502, mode: AddressingMode) {
     // Addressing Mode Accumulator
     if mode == AddressingMode::Accumulator {
         let new_accumulator = context.reg.ac >> 1;
@@ -114,9 +90,9 @@ pub fn logical_shift_right(
         // Regs
         context.reg.ac = new_accumulator;
     } else {
-        let address: u16 = fetch_instruction_abs_address(mode, context, memory);
+        let address: u16 = context.fetch_instruction_abs_address(mode);
 
-        let value = read(memory, address);
+        let value = context.read(address);
         let new_value = value >> 1;
 
         // Flags
@@ -125,15 +101,11 @@ pub fn logical_shift_right(
         context.flags.negative = false; // Since the 7th bit is always 0 negative is always unset
 
         // Store Memory
-        write(memory, address, new_value);
+        context.write(address, new_value);
     }
 }
 
-pub fn logical_rotate_left(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
+pub fn logical_rotate_left(context: &mut MOS6502, mode: AddressingMode) {
     let carry_bit = match context.flags.carry {
         true => 1_u8,
         false => 0_u8,
@@ -151,8 +123,8 @@ pub fn logical_rotate_left(
         // Regs
         context.reg.ac = new_accumulator;
     } else {
-        let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-        let value = read(memory, address);
+        let address: u16 = context.fetch_instruction_abs_address(mode);
+        let value = context.read(address);
 
         let new_value = (value << 1) | carry_bit;
 
@@ -162,15 +134,11 @@ pub fn logical_rotate_left(
         context.flags.negative = (new_value & (1 << 7)) != 0; // If the 7th bit is set
 
         // Store Memory
-        write(memory, address, new_value);
+        context.write(address, new_value);
     }
 }
 
-pub fn logical_rotate_right(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
+pub fn logical_rotate_right(context: &mut MOS6502, mode: AddressingMode) {
     let carry_bit = match context.flags.carry {
         true => 1_u8,
         false => 0_u8,
@@ -188,8 +156,8 @@ pub fn logical_rotate_right(
         // Regs
         context.reg.ac = new_accumulator;
     } else {
-        let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-        let value = read(memory, address);
+        let address: u16 = context.fetch_instruction_abs_address(mode);
+        let value = context.read(address);
 
         let new_value = (value >> 1) | (carry_bit << 7);
 
@@ -199,6 +167,6 @@ pub fn logical_rotate_right(
         context.flags.negative = (new_value & (1 << 7)) != 0; // If the 7th bit is set
 
         // Store Memory
-        write(memory, address, new_value);
+        context.write(address, new_value);
     }
 }

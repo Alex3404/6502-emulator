@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "obelisk_6502"
+name = "MOS_6502"
 version = "0.1.0"

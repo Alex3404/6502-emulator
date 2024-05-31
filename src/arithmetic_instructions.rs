@@ -1,12 +1,8 @@
 use crate::emulator::*;
 
-pub fn add_with_carry(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn add_with_carry(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
 
     let (new_ac, carry) = context.reg.ac.carrying_add(value, context.flags.carry);
 
@@ -20,13 +16,9 @@ pub fn add_with_carry(
     context.reg.ac = new_ac;
 }
 
-pub fn sub_with_carry(
-    mode: AddressingMode,
-    context: &mut Obelisk6502Context,
-    memory: &mut MemoryBank,
-) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn sub_with_carry(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
 
     // A,Z,C,N = A-M-(1-C)
     let (new_ac, carry) = context.reg.ac.borrowing_sub(value, !context.flags.carry);
@@ -41,9 +33,9 @@ pub fn sub_with_carry(
     context.reg.ac = new_ac;
 }
 
-pub fn compare_ac(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn compare_ac(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
 
     let subtracted_value = (context.reg.ac as u16 - value as u16) as u8;
 
@@ -51,9 +43,9 @@ pub fn compare_ac(mode: AddressingMode, context: &mut Obelisk6502Context, memory
     set_zn(context, subtracted_value);
 }
 
-pub fn compare_ix(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn compare_ix(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
 
     let subtracted_value = (context.reg.ix as u16 - value as u16) as u8;
 
@@ -61,9 +53,9 @@ pub fn compare_ix(mode: AddressingMode, context: &mut Obelisk6502Context, memory
     set_zn(context, subtracted_value);
 }
 
-pub fn compare_iy(mode: AddressingMode, context: &mut Obelisk6502Context, memory: &mut MemoryBank) {
-    let address: u16 = fetch_instruction_abs_address(mode, context, memory);
-    let value = read(memory, address);
+pub fn compare_iy(context: &mut MOS6502, mode: AddressingMode) {
+    let address: u16 = context.fetch_instruction_abs_address(mode);
+    let value = context.read(address);
 
     let subtracted_value = (context.reg.iy as u16 - value as u16) as u8;
 

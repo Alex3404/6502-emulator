@@ -12,5 +12,5 @@ mod status_flag_instructions;
 mod transfer_load_store_instructions;
 
 fn main() {
-    emulator::load_and_execute([0_u8; u16::MAX as usize + 1]);
+    emulator::load_and_execute([0_u8; emulator::MEMORY_SIZE]);
 }
