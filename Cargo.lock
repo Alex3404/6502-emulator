@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "MOS_6502"
+name = "mos_6502"
 version = "0.1.0"

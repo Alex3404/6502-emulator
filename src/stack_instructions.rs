@@ -1,37 +1,48 @@
 use crate::emulator::*;
 
-#[allow(unused_variables)]
-pub fn transfer_sp_to_x(context: &mut MOS6502, mode: AddressingMode) {
+pub fn transfer_sp_to_x(context: &mut MOS6502) {
     context.reg.ix = context.reg.sp;
-
-    context.flags.zero = context.reg.ac == 0;
-    context.flags.negative = (context.reg.ac & (1 << 7)) != 0;
+    context.set_zn(context.reg.ix);
+    context.tick();
 }
 
-#[allow(unused_variables)]
-pub fn transfer_x_to_sp(context: &mut MOS6502, mode: AddressingMode) {
+pub fn transfer_x_to_sp(context: &mut MOS6502) {
     context.reg.sp = context.reg.ix;
+    context.tick();
 }
 
-#[allow(unused_variables)]
-pub fn push_ac(context: &mut MOS6502, mode: AddressingMode) {
-    context.push(context.reg.ac);
+pub fn push_ac(context: &mut MOS6502) {
+    // T1
+    context.stack_push(context.reg.ac);
+    context.tick();
 }
 
-#[allow(unused_variables)]
-pub fn push_processor(context: &mut MOS6502, mode: AddressingMode) {
+pub fn pull_ac(context: &mut MOS6502) {
+    // T1
+    context.stack_peek();
+    context.stack_pop_no_read();
+    context.tick();
+
+    // T2
+    context.reg.ac = context.stack_peek();
+    context.set_zn(context.reg.ac);
+    context.tick();
+}
+
+pub fn push_processor(context: &mut MOS6502) {
+    // T1
     context.push_processor_status();
+    context.tick();
 }
 
-#[allow(unused_variables)]
-pub fn pull_ac(context: &mut MOS6502, mode: AddressingMode) {
-    context.reg.ac = context.pop();
+pub fn pull_processor_status(context: &mut MOS6502) {
+    // T1
+    context.stack_peek();
+    context.stack_pop_no_read();
+    context.tick();
 
-    context.flags.zero = context.reg.ac == 0;
-    context.flags.negative = (context.reg.ac & (1 << 7)) != 0;
-}
-
-#[allow(unused_variables)]
-pub fn pull_processor_status(context: &mut MOS6502, mode: AddressingMode) {
-    context.pop_processor_status();
+    // T2
+    let value = context.stack_peek();
+    context.set_proccessor_status(value);
+    context.tick();
 }

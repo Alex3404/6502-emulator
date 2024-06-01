@@ -1,63 +1,37 @@
 use crate::emulator::*;
 
-pub fn inc_memory(context: &mut MOS6502, mode: AddressingMode) {
-    let address: u16 = context.fetch_instruction_abs_address(mode);
-    let value = context.read(address);
+pub fn inc_memory(context: &mut MOS6502, value: u8) -> u8 {
     let new_value = ((value as u16 + 1) & 0xFF) as u8;
-
-    context.flags.zero = new_value == 0;
-    context.flags.negative = (new_value & (1 << 7)) != 0;
-
-    context.write(address, new_value);
+    context.set_zn(new_value);
+    new_value
 }
 
-#[allow(unused_variables)]
-pub fn inc_ix(context: &mut MOS6502, mode: AddressingMode) {
+pub fn inc_ix(context: &mut MOS6502) {
     let new_ix = context.reg.ix + 1;
-
-    context.flags.zero = new_ix == 0;
-    context.flags.negative = (new_ix & (1 << 7)) != 0;
-
+    context.set_zn(new_ix);
     context.reg.ix = new_ix
 }
 
-#[allow(unused_variables)]
-pub fn inc_iy(context: &mut MOS6502, mode: AddressingMode) {
-    let new_ix = context.reg.ix + 1;
-
-    context.flags.zero = new_ix == 0;
-    context.flags.negative = (new_ix & (1 << 7)) != 0;
-
-    context.reg.ix = new_ix
+pub fn inc_iy(context: &mut MOS6502) {
+    let new_iy = context.reg.iy + 1;
+    context.set_zn(new_iy);
+    context.reg.iy = new_iy
 }
 
-pub fn dec_memory(context: &mut MOS6502, mode: AddressingMode) {
-    let address: u16 = context.fetch_instruction_abs_address(mode);
-    let value = context.read(address);
-    let new_value = ((value as u16 - 1) & 0xFF) as u8;
-
-    context.flags.zero = new_value == 0;
-    context.flags.negative = (new_value & (1 << 7)) != 0;
-
-    context.write(address, new_value);
+pub fn dec_memory(context: &mut MOS6502, value: u8) -> u8 {
+    let new_value = unsafe { value.unchecked_sub(1) };
+    context.set_zn(new_value);
+    new_value
 }
 
-#[allow(unused_variables)]
-pub fn dec_ix(context: &mut MOS6502, mode: AddressingMode) {
+pub fn dec_ix(context: &mut MOS6502) {
     let new_ix = ((context.reg.ix as u16 - 1) & 0xFF) as u8;
-
-    context.flags.zero = new_ix == 0;
-    context.flags.negative = (new_ix & (1 << 7)) != 0;
-
+    context.set_zn(new_ix);
     context.reg.ix = new_ix
 }
 
-#[allow(unused_variables)]
-pub fn dec_iy(context: &mut MOS6502, mode: AddressingMode) {
-    let new_ix = ((context.reg.iy as u16 - 1) & 0xFF) as u8;
-
-    context.flags.zero = new_ix == 0;
-    context.flags.negative = (new_ix & (1 << 7)) != 0;
-
-    context.reg.ix = new_ix
+pub fn dec_iy(context: &mut MOS6502) {
+    let new_iy = ((context.reg.iy as u16 - 1) & 0xFF) as u8;
+    context.set_zn(new_iy);
+    context.reg.iy = new_iy
 }

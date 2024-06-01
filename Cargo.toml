@@ -1,5 +1,5 @@
 [package]
-name = "MOS_6502"
+name = "mos_6502"
 version = "0.1.0"
 edition = "2021"
 
