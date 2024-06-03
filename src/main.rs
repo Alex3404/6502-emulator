@@ -3,20 +3,12 @@
 
 use std::fs::File;
 
-#[allow(unused_variables)]
-mod addressing_mode_test;
-mod arithmetic_instructions;
-mod branching_instructions;
 mod cpu;
-mod inc_dec_instructions;
-mod logical_instructions;
+mod disassembler;
 mod memory;
-mod opcode_modes;
-mod stack_instructions;
-mod status_flag_instructions;
-mod transfer_load_store_instructions;
+mod tests;
 
-const TEST_FILE_PATH: &str = "6502_functional_test.bin";
+const TEST_FILE_PATH: &str = "tests\\6502_functional_test.bin";
 
 fn main() {
     let mut file = File::open(TEST_FILE_PATH).unwrap();
@@ -24,5 +16,18 @@ fn main() {
     let memory = memory::memory_from_file(&mut file, true);
 
     let mut cpu = cpu::MOS6502::new(Box::new(memory));
-    cpu.execute(0x400);
+    cpu.reset();
+    cpu.set_pc(0x400);
+    loop {
+        let disassembly = disassembler::disassemble_instruction(&mut cpu.mem, cpu.reg.pc);
+        if let Some(str) = disassembly {
+            println!("Executing {}", str)
+        }
+
+        cpu.step();
+        if cpu.is_trapped() {
+            break;
+        }
+    }
+    println!("CPU Trapped!");
 }

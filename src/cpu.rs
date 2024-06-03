@@ -1,24 +1,21 @@
+use bitflags::bitflags;
 use std::boxed::Box;
 use std::time::Instant;
 
-use crate::{
-    arithmetic_instructions, branching_instructions, inc_dec_instructions, logical_instructions,
-    memory::MemoryBus, opcode_modes, stack_instructions, status_flag_instructions,
-    transfer_load_store_instructions,
-};
+mod arithmetic_instructions;
+mod branching_instructions;
+mod inc_dec_instructions;
+mod logical_instructions;
+pub mod opcode_modes;
+mod stack_instructions;
+mod status_instructions;
+mod transfer_load_store_instructions;
+
+use crate::memory::MemoryBus;
 
 pub const RESET_VECTOR: u16 = 0xFFFC;
 pub const IRQ_VECTOR: u16 = 0xFFFE;
 pub const STACK_BASE: u16 = 0x100;
-
-pub const CARRY_FLAG: u8 = 1;
-pub const ZERO_FLAG: u8 = 2;
-pub const INT_DISABLE_FLAG: u8 = 4;
-pub const DECIMAL_FLAG: u8 = 8;
-pub const BREAK_FLAG: u8 = 16;
-pub const UNUSED_FLAG: u8 = 32;
-pub const OVERFLOW_FLAG: u8 = 64;
-pub const NEGATIVE_FLAG: u8 = 128;
 
 pub struct MOS6502Registers {
     pub pc: u16,
@@ -28,20 +25,28 @@ pub struct MOS6502Registers {
     pub iy: u8,
 }
 
-pub struct MOS6502Flags {
-    pub carry: bool,
-    pub zero: bool,
-    pub int_disable: bool,
-    pub decimal_mode: bool,
-    pub break_cmd: bool,
-    pub overflow: bool,
-    pub negative: bool,
+bitflags! {
+    #[derive(Debug, Clone, Copy)]
+    pub struct CPUFLAGS : u8 {
+        const CARRY = 1;
+        const ZERO = 2;
+        const INT_DISABLE = 4;
+        const DECIMAL = 8;
+        const BREAK = 16;
+        const UNUSED = 32;
+        const OVERFLOW = 64;
+        const NEGATIVE = 128;
+
+        // The source may set any bits
+        const _ = !0;
+    }
 }
 
 pub struct MOS6502 {
     pub reg: MOS6502Registers,
-    pub flags: MOS6502Flags,
+    pub flags: CPUFLAGS,
     pub mem: Box<dyn MemoryBus>,
+    trapped: bool,
     last_clock: Instant,
 }
 
@@ -59,18 +64,24 @@ impl MOS6502 {
                 ix: 0,
                 iy: 0,
             },
-            flags: MOS6502Flags {
-                carry: false,
-                zero: false,
-                int_disable: false,
-                decimal_mode: false,
-                break_cmd: false,
-                overflow: false,
-                negative: false,
-            },
+            flags: CPUFLAGS::UNUSED,
             mem: memory,
             last_clock: Instant::now(),
+            trapped: false,
         }
+    }
+
+    fn trapped(&mut self) {
+        self.trapped = true;
+    }
+
+    pub fn is_trapped(&mut self) -> bool {
+        self.trapped
+    }
+
+    pub fn set_pc(&mut self, address: u16) {
+        self.trapped = false;
+        self.reg.pc = address;
     }
 
     pub fn execute(&mut self, start_address: u16) {
@@ -78,35 +89,35 @@ impl MOS6502 {
         self.reg.pc = start_address;
 
         loop {
-            step(self);
+            self.step();
         }
     }
 
-    pub fn stack_peek(&mut self) -> u8 {
+    fn stack_peek(&mut self) -> u8 {
         self.mem.read(STACK_BASE + self.reg.sp as u16)
     }
 
     #[allow(dead_code)]
-    pub fn stack_write(&mut self, value: u8) {
+    fn stack_write(&mut self, value: u8) {
         self.mem.write(STACK_BASE + self.reg.sp as u16, value);
     }
 
-    pub fn stack_pop_no_read(&mut self) {
+    fn stack_pop_no_read(&mut self) {
         self.reg.sp = unsafe { self.reg.sp.unchecked_add(1) };
     }
 
     #[allow(dead_code)]
-    pub fn stack_push_no_read(&mut self) {
+    fn stack_push_no_read(&mut self) {
         self.reg.sp = unsafe { self.reg.sp.unchecked_sub(1) };
     }
 
-    pub fn stack_push(&mut self, value: u8) {
+    fn stack_push(&mut self, value: u8) {
         self.mem.write(STACK_BASE + self.reg.sp as u16, value);
         self.reg.sp = unsafe { self.reg.sp.unchecked_sub(1) };
     }
 
     #[allow(dead_code)]
-    pub fn stack_pop(&mut self) -> u8 {
+    fn stack_pop(&mut self) -> u8 {
         self.reg.sp = unsafe { self.reg.sp.unchecked_add(1) };
         self.mem.read(STACK_BASE + self.reg.sp as u16)
     }
@@ -114,46 +125,20 @@ impl MOS6502 {
     pub fn reset(&mut self) {
         self.reg.sp = 0x00;
         self.reg.pc =
-            self.mem.read(RESET_VECTOR) as u16 | ((self.mem.read(RESET_VECTOR) as u16) << 8);
-        self.flags.int_disable = true;
+            self.mem.read(RESET_VECTOR) as u16 | ((self.mem.read(RESET_VECTOR + 1) as u16) << 8);
+        self.flags |= CPUFLAGS::INT_DISABLE;
     }
 
-    pub fn push_processor_status(&mut self) {
-        let mut value = UNUSED_FLAG | BREAK_FLAG;
-
-        if self.flags.carry {
-            value |= CARRY_FLAG;
-        }
-        if self.flags.zero {
-            value |= ZERO_FLAG;
-        }
-        if self.flags.int_disable {
-            value |= INT_DISABLE_FLAG;
-        }
-        if self.flags.decimal_mode {
-            value |= DECIMAL_FLAG;
-        }
-        if self.flags.overflow {
-            value |= OVERFLOW_FLAG;
-        }
-        if self.flags.negative {
-            value |= NEGATIVE_FLAG;
-        }
-
-        self.stack_push(value);
+    fn push_processor_status(&mut self) {
+        let flags = self.flags | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
+        self.stack_push(flags.bits());
     }
 
-    pub fn set_proccessor_status(&mut self, value: u8) {
-        self.flags.carry = value & CARRY_FLAG != 0;
-        self.flags.zero = value & ZERO_FLAG != 0;
-        self.flags.int_disable = value & INT_DISABLE_FLAG != 0;
-        self.flags.decimal_mode = value & DECIMAL_FLAG != 0;
-        self.flags.overflow = value & OVERFLOW_FLAG != 0;
-        self.flags.negative = value & NEGATIVE_FLAG != 0;
-        self.flags.break_cmd = true;
+    fn set_proccessor_status(&mut self, value: u8) {
+        self.flags = CPUFLAGS::from_bits_truncate(value) | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
     }
 
-    pub fn tick(&mut self) {
+    fn tick(&mut self) {
         loop {
             let now = Instant::now();
             let time = now - self.last_clock;
@@ -163,315 +148,161 @@ impl MOS6502 {
         }
     }
 
-    pub fn set_zn(&mut self, value: u8) {
-        self.flags.zero = value == 0;
-        self.flags.negative = (value & (1 << 7)) != 0;
+    fn set_zn(&mut self, value: u8) {
+        self.flags.set(CPUFLAGS::ZERO, value == 0);
+        self.flags.set(CPUFLAGS::NEGATIVE, (value & (1 << 7)) != 0);
     }
-}
 
-#[derive(PartialEq, Debug, Copy, Clone)]
-pub enum AddressingMode {
-    Accumulator,
-    Immediate,
-    Indirect,
-    Relative,
-    Implied,
-    ZeroPage,
-    ZeroPageX,
-    ZeroPageY,
-    Absolute,
-    AbsoluteX,
-    AbsoluteY,
-    IndirectX,
-    IndirectY,
-}
+    pub fn step(&mut self) {
+        use arithmetic_instructions::*;
+        use branching_instructions::*;
+        use inc_dec_instructions::*;
+        use logical_instructions::*;
+        use opcode_modes::*;
+        use stack_instructions::*;
+        use status_instructions::*;
+        use transfer_load_store_instructions::*;
 
-fn step(context: &mut MOS6502) {
-    // T1
-    let opcode: u8 = context.mem.read(context.reg.pc);
-    context.reg.pc = (context.reg.pc as u32 + 1) as u16;
-    context.tick();
+        // T1
+        let opcode: u8 = self.mem.read(self.reg.pc);
+        self.reg.pc = (self.reg.pc as u32 + 1) as u16;
+        self.tick();
 
-    let addressing_mode = opcode_modes::get_addressing_mode(opcode);
-    match opcode {
-        0x0 => branching_instructions::break_interrupt(context), // Custom preface no opcode_modes::instruction_implied() used
-        0x40 => opcode_modes::instruction_implied(
-            context,
-            &branching_instructions::return_from_interrupt,
-        ),
-        0xEA => println!("NOP"),
+        let mode = opcode_modes::get_addressing_mode(opcode);
+        match opcode {
+            0x0 => break_interrupt(self), // Custom preface no instruction_implied() used
+            0x40 => instruction_implied(self, &return_from_interrupt),
+            0xEA => (),
 
-        // Logical
-        0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &logical_instructions::logical_and,
-        ),
-        0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &logical_instructions::logical_exclusive_or,
-        ),
-        0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &logical_instructions::logical_inclusive_or,
-            );
-        }
-        0x24 | 0x2C => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &logical_instructions::logical_bit_test,
-        ),
+            // Logical
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
+                instruction_read(self, mode, &logical_and)
+            }
+            0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => {
+                instruction_read(self, mode, &logical_exclusive_or)
+            }
+            0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
+                instruction_read(self, mode, &logical_inclusive_or);
+            }
+            0x24 | 0x2C => instruction_read(self, mode, &logical_bit_test),
 
-        // Shifts
-        0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
-            opcode_modes::instruction_read_move_write(
-                context,
-                addressing_mode,
-                &logical_instructions::logical_shift_left,
-            );
-        }
-        0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
-            opcode_modes::instruction_read_move_write(
-                context,
-                addressing_mode,
-                &logical_instructions::logical_shift_right,
-            );
-        }
-        0x2A | 0x26 | 0x36 | 0x2E | 0x3E => {
-            opcode_modes::instruction_read_move_write(
-                context,
-                addressing_mode,
-                &logical_instructions::logical_rotate_left,
-            );
-        }
-        0x6A | 0x66 | 0x76 | 0x6E | 0x7E => {
-            opcode_modes::instruction_read_move_write(
-                context,
-                addressing_mode,
-                &logical_instructions::logical_rotate_right,
-            );
-        }
+            // Shifts
+            0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
+                instruction_read_move_write(self, mode, &logical_shift_left);
+            }
+            0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
+                instruction_read_move_write(self, mode, &logical_shift_right);
+            }
+            0x2A | 0x26 | 0x36 | 0x2E | 0x3E => {
+                instruction_read_move_write(self, mode, &logical_rotate_left);
+            }
+            0x6A | 0x66 | 0x76 | 0x6E | 0x7E => {
+                instruction_read_move_write(self, mode, &logical_rotate_right);
+            }
 
-        // Arithmetic
-        0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &arithmetic_instructions::add_with_carry,
-            );
-        }
-        0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &arithmetic_instructions::sub_with_carry,
-            );
-        }
-        0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &arithmetic_instructions::compare_ac,
-            );
-        }
-        0xE0 | 0xE4 | 0xEC => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &arithmetic_instructions::compare_ix,
-            );
-        }
-        0xC0 | 0xC4 | 0xCC => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &arithmetic_instructions::compare_iy,
-            );
-        }
+            // Arithmetic
+            0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
+                instruction_read(self, mode, &add_with_carry);
+            }
+            0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
+                instruction_read(self, mode, &sub_with_carry);
+            }
+            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
+                instruction_read(self, mode, &compare_ac);
+            }
+            0xE0 | 0xE4 | 0xEC => {
+                instruction_read(self, mode, &compare_ix);
+            }
+            0xC0 | 0xC4 | 0xCC => {
+                instruction_read(self, mode, &compare_iy);
+            }
 
-        // Increment & Decrement Instructions
-        0xE6 | 0xF6 | 0xEE | 0xFE => opcode_modes::instruction_read_move_write(
-            context,
-            addressing_mode,
-            &inc_dec_instructions::inc_memory,
-        ),
-        0xE8 => {
-            opcode_modes::instruction_implied(context, &inc_dec_instructions::inc_ix);
-        }
-        0xC8 => {
-            opcode_modes::instruction_implied(context, &inc_dec_instructions::inc_iy);
-        }
+            // Increment & Decrement Instructions
+            0xE6 | 0xF6 | 0xEE | 0xFE => instruction_read_move_write(self, mode, &inc_memory),
+            0xE8 => {
+                instruction_implied(self, &inc_ix);
+            }
+            0xC8 => {
+                instruction_implied(self, &inc_iy);
+            }
 
-        0xC6 | 0xD6 | 0xCE | 0xDE => {
-            opcode_modes::instruction_read_move_write(
-                context,
-                addressing_mode,
-                &inc_dec_instructions::dec_memory,
-            );
-        }
-        0xCA => {
-            opcode_modes::instruction_implied(context, &inc_dec_instructions::dec_ix);
-        }
-        0x88 => {
-            opcode_modes::instruction_implied(context, &inc_dec_instructions::dec_iy);
-        }
+            0xC6 | 0xD6 | 0xCE | 0xDE => {
+                instruction_read_move_write(self, mode, &dec_memory);
+            }
+            0xCA => {
+                instruction_implied(self, &dec_ix);
+            }
+            0x88 => {
+                instruction_implied(self, &dec_iy);
+            }
 
-        // Load/Store instructions
-        0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &transfer_load_store_instructions::load_ac,
-            );
-        }
+            // Load/Store instructions
+            0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
+                instruction_read(self, mode, &load_ac);
+            }
 
-        0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &transfer_load_store_instructions::load_ix,
-            );
-        }
+            0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
+                instruction_read(self, mode, &load_ix);
+            }
 
-        0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
-            opcode_modes::instruction_read(
-                context,
-                addressing_mode,
-                &transfer_load_store_instructions::load_iy,
-            );
-        }
+            0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
+                instruction_read(self, mode, &load_iy);
+            }
 
-        0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
-            opcode_modes::instruction_write(
-                context,
-                addressing_mode,
-                &transfer_load_store_instructions::store_ac,
-            );
-        }
+            0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
+                instruction_write(self, mode, &store_ac);
+            }
 
-        0x86 | 0x96 | 0x8E => {
-            opcode_modes::instruction_write(
-                context,
-                addressing_mode,
-                &transfer_load_store_instructions::store_ix,
-            );
-        }
+            0x86 | 0x96 | 0x8E => {
+                instruction_write(self, mode, &store_ix);
+            }
 
-        0x84 | 0x94 | 0x8C => {
-            opcode_modes::instruction_write(
-                context,
-                addressing_mode,
-                &transfer_load_store_instructions::store_iy,
-            );
-        }
+            0x84 | 0x94 | 0x8C => {
+                instruction_write(self, mode, &store_iy);
+            }
 
-        // Transfer instructions
-        0xAA => opcode_modes::instruction_implied(
-            context,
-            &transfer_load_store_instructions::transfer_ac_to_x,
-        ),
-        0xA8 => opcode_modes::instruction_implied(
-            context,
-            &transfer_load_store_instructions::transfer_ac_to_y,
-        ),
-        0x8A => opcode_modes::instruction_implied(
-            context,
-            &transfer_load_store_instructions::transfer_x_to_ac,
-        ),
-        0x98 => opcode_modes::instruction_implied(
-            context,
-            &transfer_load_store_instructions::transfer_y_to_ac,
-        ),
+            // Transfer instructions
+            0xAA => instruction_implied(self, &transfer_ac_to_x),
+            0xA8 => instruction_implied(self, &transfer_ac_to_y),
+            0x8A => instruction_implied(self, &transfer_x_to_ac),
+            0x98 => instruction_implied(self, &transfer_y_to_ac),
 
-        // Jumps & Calls
-        0x4C => branching_instructions::jmp_absolute(context),
-        0x6C => branching_instructions::jmp_indirect(context),
-        0x20 => {
-            opcode_modes::instruction_implied(context, &branching_instructions::jump_to_subroutine)
-        }
-        0x60 => opcode_modes::instruction_implied(
-            context,
-            &branching_instructions::return_from_subroutine,
-        ),
+            // Jumps & Calls
+            0x4C => jmp_absolute(self),
+            0x6C => jmp_indirect(self),
+            0x20 => instruction_implied(self, &jump_to_subroutine),
+            0x60 => instruction_implied(self, &return_from_subroutine),
 
-        // Branches
-        0x90 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_carry_clear,
-        ),
-        0xB0 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_carry_set,
-        ),
-        0xF0 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_equal,
-        ),
-        0xD0 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_not_equal,
-        ),
-        0x30 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_minus,
-        ),
-        0x10 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_positive,
-        ),
-        0x50 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_overflow_clear,
-        ),
-        0x70 => opcode_modes::instruction_read(
-            context,
-            addressing_mode,
-            &branching_instructions::branch_if_overflow_set,
-        ),
+            // Branches
+            0x90 => instruction_read(self, mode, &branch_if_carry_clear),
+            0xB0 => instruction_read(self, mode, &branch_if_carry_set),
+            0xF0 => instruction_read(self, mode, &branch_if_equal),
+            0xD0 => instruction_read(self, mode, &branch_if_not_equal),
+            0x30 => instruction_read(self, mode, &branch_if_minus),
+            0x10 => instruction_read(self, mode, &branch_if_positive),
+            0x50 => instruction_read(self, mode, &branch_if_overflow_clear),
+            0x70 => instruction_read(self, mode, &branch_if_overflow_set),
 
-        // Stack instructions
-        0xBA => opcode_modes::instruction_implied(context, &stack_instructions::transfer_sp_to_x),
-        0x9A => opcode_modes::instruction_implied(context, &stack_instructions::transfer_x_to_sp),
-        0x48 => opcode_modes::instruction_implied(context, &stack_instructions::push_ac),
-        0x08 => opcode_modes::instruction_implied(context, &stack_instructions::push_processor),
-        0x68 => opcode_modes::instruction_implied(context, &stack_instructions::pull_ac),
-        0x28 => {
-            opcode_modes::instruction_implied(context, &stack_instructions::pull_processor_status)
-        }
+            // Stack instructions
+            0xBA => instruction_implied(self, &transfer_sp_to_x),
+            0x9A => instruction_implied(self, &transfer_x_to_sp),
+            0x48 => instruction_implied(self, &push_ac),
+            0x08 => instruction_implied(self, &push_processor),
+            0x68 => instruction_implied(self, &pull_ac),
+            0x28 => instruction_implied(self, &pull_processor_status),
 
-        // Status Flags
-        0x18 => opcode_modes::instruction_implied(context, &status_flag_instructions::clear_carry),
-        0xD8 => {
-            opcode_modes::instruction_implied(context, &status_flag_instructions::clear_decimal)
-        }
-        0x58 => {
-            opcode_modes::instruction_implied(context, &status_flag_instructions::clear_int_disable)
-        }
-        0xB8 => {
-            opcode_modes::instruction_implied(context, &status_flag_instructions::clear_overflow)
-        }
-        0x38 => opcode_modes::instruction_implied(context, &status_flag_instructions::set_carry),
-        0xF8 => opcode_modes::instruction_implied(context, &status_flag_instructions::set_decimal),
-        0x78 => {
-            opcode_modes::instruction_implied(context, &status_flag_instructions::set_int_disable)
-        }
+            // Status Flags
+            0x18 => instruction_implied(self, &clear_carry),
+            0xD8 => instruction_implied(self, &clear_decimal),
+            0x58 => instruction_implied(self, &clear_int_disable),
+            0xB8 => instruction_implied(self, &clear_overflow),
+            0x38 => instruction_implied(self, &set_carry),
+            0xF8 => instruction_implied(self, &set_decimal),
+            0x78 => instruction_implied(self, &set_int_disable),
 
-        _ => {
-            panic!(
-                "Illegal instruction {:x} at {:x}",
-                opcode,
-                context.reg.pc - 1
-            );
-        }
-    };
+            _ => {
+                panic!("Illegal instruction {:x} at {:x}", opcode, self.reg.pc - 1);
+            }
+        };
+    }
 }

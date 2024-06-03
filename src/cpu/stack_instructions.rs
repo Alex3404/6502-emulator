@@ -30,7 +30,6 @@ pub fn pull_ac(context: &mut MOS6502) {
 }
 
 pub fn push_processor(context: &mut MOS6502) {
-    println!("Push proccessor!");
     // T1
     context.push_processor_status();
     context.tick();

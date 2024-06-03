@@ -3,9 +3,7 @@ use crate::cpu::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::opcode_modes;
-
-    use super::*;
+    use crate::cpu::opcode_modes::*;
     use std::collections::HashMap;
 
     #[test]
@@ -165,7 +163,7 @@ mod tests {
         op_codes_to_addressing_mode.insert(0x98, AddressingMode::Implied);
 
         for (key, value) in op_codes_to_addressing_mode.into_iter() {
-            let got = opcode_modes::get_addressing_mode(key);
+            let got = get_addressing_mode(key);
             if got != value {
                 println!(
                     "Invalid addressing mode for {:x} Expected: {:?}, Got: {:?}",

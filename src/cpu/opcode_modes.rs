@@ -5,6 +5,23 @@ type ReadInst = dyn Fn(&mut MOS6502, u8);
 type WriteInst = dyn Fn(&mut MOS6502) -> u8;
 type ReadWriteInst = dyn Fn(&mut MOS6502, u8) -> u8;
 
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum AddressingMode {
+    Accumulator,
+    Immediate,
+    Indirect,
+    Relative,
+    Implied,
+    ZeroPage,
+    ZeroPageX,
+    ZeroPageY,
+    Absolute,
+    AbsoluteX,
+    AbsoluteY,
+    IndirectX,
+    IndirectY,
+}
+
 // Matches all 151 opcodes to their correct addressing_mode
 pub fn get_addressing_mode(opcode: u8) -> AddressingMode {
     if opcode == 0x6C {
@@ -67,7 +84,6 @@ pub fn instruction_implied(context: &mut MOS6502, func: &Inst) {
 }
 
 pub fn instruction_read(context: &mut MOS6502, addressing_mode: AddressingMode, func: &ReadInst) {
-    println!("Instruction read {:?}", addressing_mode);
     match addressing_mode {
         AddressingMode::Immediate => immediate_1read(context, func),
         AddressingMode::Relative => immediate_1read(context, func),
@@ -84,7 +100,6 @@ pub fn instruction_read(context: &mut MOS6502, addressing_mode: AddressingMode, 
 }
 
 pub fn instruction_write(context: &mut MOS6502, addressing_mode: AddressingMode, func: &WriteInst) {
-    println!("Instruction write {:?}", addressing_mode);
     match addressing_mode {
         AddressingMode::Absolute => absolute_3write(context, func),
         AddressingMode::ZeroPage => zeropage_2write(context, func),
@@ -103,7 +118,6 @@ pub fn instruction_read_move_write(
     addressing_mode: AddressingMode,
     func: &ReadWriteInst,
 ) {
-    println!("Instruction rmw {:?}", addressing_mode);
     match addressing_mode {
         AddressingMode::Accumulator => ac1_rmw(context, func),
         AddressingMode::ZeroPage => zeropage_4rmw(context, func),
@@ -240,11 +254,7 @@ fn absolutey_3read(context: &mut MOS6502, func: &ReadInst) {
     // T2
     let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
     let address_y = address + context.reg.iy as u16;
-    println!("Index Y Reg: {:X}", context.reg.iy);
-    println!(
-        "Absolute, Y Read from {:X} base address {:X}",
-        address_y, address
-    );
+
     context.reg.pc += 1;
     context.tick();
 

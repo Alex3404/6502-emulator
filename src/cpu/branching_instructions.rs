@@ -9,14 +9,13 @@ pub fn jmp_absolute(context: &mut MOS6502) {
     // T2
     let address = address | ((context.mem.read(context.reg.pc) as u16) << 8);
 
-    // Checks if we are trapped (For debugging)
     if address + 2 == context.reg.pc {
-        panic!("Trapped!");
+        context.trapped();
     }
 
     context.reg.pc += 1;
     context.reg.pc = address;
-    println!("Jmp absolute to {:x}", address);
+
     context.tick()
 }
 
@@ -129,8 +128,8 @@ pub fn break_interrupt(context: &mut MOS6502) {
 
     // T4
     context.push_processor_status();
-    context.flags.break_cmd = true;
-    context.flags.int_disable = true;
+    context.flags.set(CPUFLAGS::BREAK, true);
+    context.flags.set(CPUFLAGS::INT_DISABLE, true);
     context.tick();
 
     // T5
@@ -149,12 +148,8 @@ pub fn branch(context: &mut MOS6502, relative_offset: u8) {
     context.tick();
 
     let old_pc = context.reg.pc;
-
     let new_pc = if relative_offset & (1 << 7) != 0 {
         let offset = !(relative_offset - 1);
-        if offset == 2 {
-            panic!("Trapped!");
-        }
         unsafe { context.reg.pc.unchecked_sub(offset as u16) }
     } else {
         unsafe { context.reg.pc.unchecked_add(relative_offset as u16) }
@@ -167,52 +162,58 @@ pub fn branch(context: &mut MOS6502, relative_offset: u8) {
         context.mem.read((old_pc & 0xFF00) | (new_pc & 0x00FF));
         context.tick();
     }
+
+    if relative_offset == 0xFE
+    /* -2 in 2's compilement */
+    {
+        context.trapped();
+    }
 }
 
 pub fn branch_if_carry_clear(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.carry {
+    if !context.flags.intersects(CPUFLAGS::CARRY) {
         branch(context, relative_address);
     }
 }
 
 pub fn branch_if_carry_set(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.carry {
+    if context.flags.intersects(CPUFLAGS::CARRY) {
         branch(context, relative_address);
     }
 }
 
 pub fn branch_if_equal(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.zero {
+    if context.flags.intersects(CPUFLAGS::ZERO) {
         branch(context, relative_address);
     }
 }
 
 pub fn branch_if_not_equal(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.zero {
+    if !context.flags.intersects(CPUFLAGS::ZERO) {
         branch(context, relative_address);
     }
 }
 
 pub fn branch_if_minus(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.negative {
+    if context.flags.intersects(CPUFLAGS::NEGATIVE) {
         branch(context, relative_address);
     }
 }
 
 pub fn branch_if_positive(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.negative {
+    if !context.flags.intersects(CPUFLAGS::NEGATIVE) {
         branch(context, relative_address);
     }
 }
 
 pub fn branch_if_overflow_clear(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.overflow {
+    if !context.flags.intersects(CPUFLAGS::OVERFLOW) {
         branch(context, relative_address);
     }
 }
 
 pub fn branch_if_overflow_set(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.overflow {
+    if context.flags.intersects(CPUFLAGS::OVERFLOW) {
         branch(context, relative_address);
     }
 }
