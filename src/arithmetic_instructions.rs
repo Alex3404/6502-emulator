@@ -1,4 +1,4 @@
-use crate::emulator::*;
+use crate::cpu::*;
 
 pub fn add_with_carry(context: &mut MOS6502, value: u8) {
     // A,Z,C,N,V = A+M+C
@@ -19,19 +19,20 @@ pub fn sub_with_carry(context: &mut MOS6502, value: u8) {
 }
 
 pub fn compare_ac(context: &mut MOS6502, value: u8) {
-    let subtracted_value = (context.reg.ac as u16 - value as u16) as u8;
+    println!("CMP: {:X}", value);
+    let subtracted_value = unsafe { context.reg.ac.unchecked_sub(value) };
     context.flags.carry = context.reg.ac >= value;
     context.set_zn(subtracted_value);
 }
 
 pub fn compare_ix(context: &mut MOS6502, value: u8) {
-    let subtracted_value = (context.reg.ix as u16 - value as u16) as u8;
+    let subtracted_value = unsafe { context.reg.ix.unchecked_sub(value) };
     context.flags.carry = context.reg.ix >= value;
     context.set_zn(subtracted_value);
 }
 
 pub fn compare_iy(context: &mut MOS6502, value: u8) {
-    let subtracted_value = (context.reg.iy as u16 - value as u16) as u8;
+    let subtracted_value = unsafe { context.reg.iy.unchecked_sub(value) };
     context.flags.carry = context.reg.iy >= value;
     context.set_zn(subtracted_value);
 }

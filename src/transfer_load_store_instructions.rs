@@ -1,4 +1,4 @@
-use crate::emulator::*;
+use crate::cpu::*;
 
 pub fn load_ac(context: &mut MOS6502, value: u8) {
     context.set_zn(value);

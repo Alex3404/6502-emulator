@@ -1,4 +1,4 @@
-use crate::emulator::*;
+use crate::cpu::*;
 
 pub fn logical_and(context: &mut MOS6502, value: u8) {
     let new_accumulator = context.reg.ac & value;

@@ -1,4 +1,4 @@
-use crate::emulator::*;
+use crate::cpu::*;
 
 pub fn clear_carry(context: &mut MOS6502) {
     context.flags.carry = false;

@@ -1,4 +1,4 @@
-use crate::emulator::*;
+use crate::cpu::*;
 
 pub fn transfer_sp_to_x(context: &mut MOS6502) {
     context.reg.ix = context.reg.sp;
@@ -30,6 +30,7 @@ pub fn pull_ac(context: &mut MOS6502) {
 }
 
 pub fn push_processor(context: &mut MOS6502) {
+    println!("Push proccessor!");
     // T1
     context.push_processor_status();
     context.tick();
