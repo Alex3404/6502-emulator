@@ -11,19 +11,11 @@ mod stack_instructions;
 mod status_instructions;
 mod transfer_load_store_instructions;
 
-use crate::memory::MemoryBus;
+use crate::address_bus::AddressBus;
 
 pub const RESET_VECTOR: u16 = 0xFFFC;
 pub const IRQ_VECTOR: u16 = 0xFFFE;
 pub const STACK_BASE: u16 = 0x100;
-
-pub struct MOS6502Registers {
-    pub pc: u16,
-    pub sp: u8,
-    pub ac: u8,
-    pub ix: u8,
-    pub iy: u8,
-}
 
 bitflags! {
     #[derive(Debug, Clone, Copy)]
@@ -42,10 +34,18 @@ bitflags! {
     }
 }
 
+pub struct MOS6502Registers {
+    pub pc: u16,
+    pub sp: u8,
+    pub ac: u8,
+    pub ix: u8,
+    pub iy: u8,
+    pub status: CPUFLAGS,
+}
+
 pub struct MOS6502 {
     pub reg: MOS6502Registers,
-    pub flags: CPUFLAGS,
-    pub mem: Box<dyn MemoryBus>,
+    pub bus: Box<dyn AddressBus>,
     trapped: bool,
     last_clock: Instant,
 }
@@ -54,8 +54,9 @@ pub fn same_page(addr1: u16, addr2: u16) -> bool {
     (addr1 & 0xFF00) == (addr2 & 0xFF00)
 }
 
+#[allow(dead_code)]
 impl MOS6502 {
-    pub fn new(memory: Box<dyn MemoryBus>) -> Self {
+    pub fn new(memory: Box<dyn AddressBus>) -> Self {
         Self {
             reg: MOS6502Registers {
                 pc: 0,
@@ -63,12 +64,20 @@ impl MOS6502 {
                 ac: 0,
                 ix: 0,
                 iy: 0,
+                status: CPUFLAGS::UNUSED,
             },
-            flags: CPUFLAGS::UNUSED,
-            mem: memory,
+            bus: memory,
             last_clock: Instant::now(),
             trapped: false,
         }
+    }
+
+    fn set(&mut self, flag: CPUFLAGS, value: bool) {
+        self.reg.status.set(flag, value);
+    }
+
+    fn is_set(&mut self, flag: CPUFLAGS) -> bool {
+        self.reg.status.intersects(flag)
     }
 
     fn trapped(&mut self) {
@@ -94,12 +103,12 @@ impl MOS6502 {
     }
 
     fn stack_peek(&mut self) -> u8 {
-        self.mem.read(STACK_BASE + self.reg.sp as u16)
+        self.bus.read(STACK_BASE + self.reg.sp as u16)
     }
 
     #[allow(dead_code)]
     fn stack_write(&mut self, value: u8) {
-        self.mem.write(STACK_BASE + self.reg.sp as u16, value);
+        self.bus.write(STACK_BASE + self.reg.sp as u16, value);
     }
 
     fn stack_pop_no_read(&mut self) {
@@ -112,30 +121,30 @@ impl MOS6502 {
     }
 
     fn stack_push(&mut self, value: u8) {
-        self.mem.write(STACK_BASE + self.reg.sp as u16, value);
+        self.bus.write(STACK_BASE + self.reg.sp as u16, value);
         self.reg.sp = unsafe { self.reg.sp.unchecked_sub(1) };
     }
 
     #[allow(dead_code)]
     fn stack_pop(&mut self) -> u8 {
         self.reg.sp = unsafe { self.reg.sp.unchecked_add(1) };
-        self.mem.read(STACK_BASE + self.reg.sp as u16)
+        self.bus.read(STACK_BASE + self.reg.sp as u16)
     }
 
     pub fn reset(&mut self) {
         self.reg.sp = 0x00;
         self.reg.pc =
-            self.mem.read(RESET_VECTOR) as u16 | ((self.mem.read(RESET_VECTOR + 1) as u16) << 8);
-        self.flags |= CPUFLAGS::INT_DISABLE;
+            self.bus.read(RESET_VECTOR) as u16 | ((self.bus.read(RESET_VECTOR + 1) as u16) << 8);
+        self.reg.status |= CPUFLAGS::INT_DISABLE;
     }
 
     fn push_processor_status(&mut self) {
-        let flags = self.flags | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
+        let flags = self.reg.status | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
         self.stack_push(flags.bits());
     }
 
     fn set_proccessor_status(&mut self, value: u8) {
-        self.flags = CPUFLAGS::from_bits_truncate(value) | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
+        self.reg.status = CPUFLAGS::from_bits_truncate(value) | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
     }
 
     fn tick(&mut self) {
@@ -149,8 +158,8 @@ impl MOS6502 {
     }
 
     fn set_zn(&mut self, value: u8) {
-        self.flags.set(CPUFLAGS::ZERO, value == 0);
-        self.flags.set(CPUFLAGS::NEGATIVE, (value & (1 << 7)) != 0);
+        self.set(CPUFLAGS::ZERO, value == 0);
+        self.set(CPUFLAGS::NEGATIVE, (value & (1 << 7)) != 0);
     }
 
     pub fn step(&mut self) {
@@ -164,7 +173,7 @@ impl MOS6502 {
         use transfer_load_store_instructions::*;
 
         // T1
-        let opcode: u8 = self.mem.read(self.reg.pc);
+        let opcode: u8 = self.bus.read(self.reg.pc);
         self.reg.pc = (self.reg.pc as u32 + 1) as u16;
         self.tick();
 

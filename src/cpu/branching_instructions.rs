@@ -1,37 +1,37 @@
 use crate::cpu::*;
 
-pub fn jmp_absolute(context: &mut MOS6502) {
+pub fn jmp_absolute(cpu: &mut MOS6502) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | ((context.mem.read(context.reg.pc) as u16) << 8);
+    let address = address | ((cpu.bus.read(cpu.reg.pc) as u16) << 8);
 
-    if address + 2 == context.reg.pc {
-        context.trapped();
+    if address + 2 == cpu.reg.pc {
+        cpu.trapped();
     }
 
-    context.reg.pc += 1;
-    context.reg.pc = address;
+    cpu.reg.pc += 1;
+    cpu.reg.pc = address;
 
-    context.tick()
+    cpu.tick()
 }
 
-pub fn jmp_indirect(context: &mut MOS6502) {
+pub fn jmp_indirect(cpu: &mut MOS6502) {
     // T1
-    let indirect_address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let indirect_address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let indirect_address = indirect_address | ((context.mem.read(context.reg.pc) as u16) << 8);
-    context.reg.pc += 1;
-    context.tick();
+    let indirect_address = indirect_address | ((cpu.bus.read(cpu.reg.pc) as u16) << 8);
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
-    let address = context.mem.read(indirect_address) as u16;
+    let address = cpu.bus.read(indirect_address) as u16;
 
     // T4
     // See https://www.nesdev.org/obelisk-6502-guide/reference.html
@@ -42,178 +42,178 @@ pub fn jmp_indirect(context: &mut MOS6502) {
     // ensure the indirect vector is not at the end of the page.
 
     // I'm going to use the 65SC02 version in the sake of simplicity
-    let address = address | ((context.mem.read(indirect_address + 1) as u16) << 8);
-    context.reg.pc = address;
-    context.tick();
+    let address = address | ((cpu.bus.read(indirect_address + 1) as u16) << 8);
+    cpu.reg.pc = address;
+    cpu.tick();
 }
 
-pub fn jump_to_subroutine(context: &mut MOS6502) {
+pub fn jump_to_subroutine(cpu: &mut MOS6502) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1; // Only increment by 1 (and the instruction is 3) because we push the next pc - 1
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1; // Only increment by 1 (and the instruction is 3) because we push the next pc - 1
+    cpu.tick();
 
     // T2
-    context.stack_peek();
-    context.tick();
+    cpu.stack_peek();
+    cpu.tick();
 
     // T3
-    context.stack_push((context.reg.pc >> 8) as u8);
-    context.tick();
+    cpu.stack_push((cpu.reg.pc >> 8) as u8);
+    cpu.tick();
 
     // T4
-    context.stack_push(context.reg.pc as u8);
-    context.tick();
+    cpu.stack_push(cpu.reg.pc as u8);
+    cpu.tick();
 
     // T5
-    let address = address | ((context.mem.read(context.reg.pc) as u16) << 8);
-    context.reg.pc = address;
-    context.tick();
+    let address = address | ((cpu.bus.read(cpu.reg.pc) as u16) << 8);
+    cpu.reg.pc = address;
+    cpu.tick();
 }
 
-pub fn return_from_subroutine(context: &mut MOS6502) {
+pub fn return_from_subroutine(cpu: &mut MOS6502) {
     // T1
-    context.mem.read(context.reg.pc);
-    context.tick();
+    cpu.bus.read(cpu.reg.pc);
+    cpu.tick();
     // T2
-    context.stack_peek();
-    context.stack_pop_no_read();
-    context.tick();
+    cpu.stack_peek();
+    cpu.stack_pop_no_read();
+    cpu.tick();
     // T3
-    let address = context.stack_peek() as u16;
-    context.stack_pop_no_read();
-    context.tick();
+    let address = cpu.stack_peek() as u16;
+    cpu.stack_pop_no_read();
+    cpu.tick();
     // T4
-    let address = address | ((context.stack_peek() as u16) << 8);
-    context.tick();
+    let address = address | ((cpu.stack_peek() as u16) << 8);
+    cpu.tick();
     // T5
-    context.mem.read(address);
-    context.reg.pc = address + 1;
-    context.tick();
+    cpu.bus.read(address);
+    cpu.reg.pc = address + 1;
+    cpu.tick();
 }
 
-pub fn return_from_interrupt(context: &mut MOS6502) {
+pub fn return_from_interrupt(cpu: &mut MOS6502) {
     // T1
-    context.stack_peek();
-    context.stack_pop_no_read();
-    context.tick();
+    cpu.stack_peek();
+    cpu.stack_pop_no_read();
+    cpu.tick();
     // T2
-    let value = context.stack_peek();
-    context.set_proccessor_status(value);
-    context.stack_pop_no_read();
-    context.tick();
+    let value = cpu.stack_peek();
+    cpu.set_proccessor_status(value);
+    cpu.stack_pop_no_read();
+    cpu.tick();
     // T3
-    let address = context.stack_peek() as u16;
-    context.stack_pop_no_read();
-    context.tick();
+    let address = cpu.stack_peek() as u16;
+    cpu.stack_pop_no_read();
+    cpu.tick();
     // T4
-    let address = address | ((context.stack_peek() as u16) << 8);
-    context.reg.pc = address;
-    context.tick();
+    let address = address | ((cpu.stack_peek() as u16) << 8);
+    cpu.reg.pc = address;
+    cpu.tick();
 }
 
-pub fn break_interrupt(context: &mut MOS6502) {
+pub fn break_interrupt(cpu: &mut MOS6502) {
     // T1
-    context.mem.read(context.reg.pc);
-    context.reg.pc += 1;
-    context.tick();
+    cpu.bus.read(cpu.reg.pc);
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.stack_push((context.reg.pc >> 8) as u8);
-    context.tick();
+    cpu.stack_push((cpu.reg.pc >> 8) as u8);
+    cpu.tick();
 
     // T3
-    context.stack_push(context.reg.pc as u8);
-    context.tick();
+    cpu.stack_push(cpu.reg.pc as u8);
+    cpu.tick();
 
     // T4
-    context.push_processor_status();
-    context.flags.set(CPUFLAGS::BREAK, true);
-    context.flags.set(CPUFLAGS::INT_DISABLE, true);
-    context.tick();
+    cpu.push_processor_status();
+    cpu.set(CPUFLAGS::BREAK, true);
+    cpu.set(CPUFLAGS::INT_DISABLE, true);
+    cpu.tick();
 
     // T5
-    let address = context.mem.read(IRQ_VECTOR) as u16;
-    context.tick();
+    let address = cpu.bus.read(IRQ_VECTOR) as u16;
+    cpu.tick();
 
     // T6
-    let address = address | (context.mem.read(IRQ_VECTOR + 1) as u16) << 8;
-    context.reg.pc = address;
-    context.tick();
+    let address = address | (cpu.bus.read(IRQ_VECTOR + 1) as u16) << 8;
+    cpu.reg.pc = address;
+    cpu.tick();
 }
 
-pub fn branch(context: &mut MOS6502, relative_offset: u8) {
+pub fn branch(cpu: &mut MOS6502, relative_offset: u8) {
     // T1
-    context.mem.read(context.reg.pc);
-    context.tick();
+    cpu.bus.read(cpu.reg.pc);
+    cpu.tick();
 
-    let old_pc = context.reg.pc;
+    let old_pc = cpu.reg.pc;
     let new_pc = if relative_offset & (1 << 7) != 0 {
         let offset = !(relative_offset - 1);
-        unsafe { context.reg.pc.unchecked_sub(offset as u16) }
+        unsafe { cpu.reg.pc.unchecked_sub(offset as u16) }
     } else {
-        unsafe { context.reg.pc.unchecked_add(relative_offset as u16) }
+        unsafe { cpu.reg.pc.unchecked_add(relative_offset as u16) }
     };
 
-    context.reg.pc = new_pc;
+    cpu.reg.pc = new_pc;
 
-    if !same_page(context.reg.pc, new_pc) {
+    if !same_page(cpu.reg.pc, new_pc) {
         // T2
-        context.mem.read((old_pc & 0xFF00) | (new_pc & 0x00FF));
-        context.tick();
+        cpu.bus.read((old_pc & 0xFF00) | (new_pc & 0x00FF));
+        cpu.tick();
     }
 
     if relative_offset == 0xFE
     /* -2 in 2's compilement */
     {
-        context.trapped();
+        cpu.trapped();
     }
 }
 
-pub fn branch_if_carry_clear(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.intersects(CPUFLAGS::CARRY) {
-        branch(context, relative_address);
+pub fn branch_if_carry_clear(cpu: &mut MOS6502, relative_address: u8) {
+    if !cpu.is_set(CPUFLAGS::CARRY) {
+        branch(cpu, relative_address);
     }
 }
 
-pub fn branch_if_carry_set(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.intersects(CPUFLAGS::CARRY) {
-        branch(context, relative_address);
+pub fn branch_if_carry_set(cpu: &mut MOS6502, relative_address: u8) {
+    if cpu.is_set(CPUFLAGS::CARRY) {
+        branch(cpu, relative_address);
     }
 }
 
-pub fn branch_if_equal(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.intersects(CPUFLAGS::ZERO) {
-        branch(context, relative_address);
+pub fn branch_if_equal(cpu: &mut MOS6502, relative_address: u8) {
+    if cpu.is_set(CPUFLAGS::ZERO) {
+        branch(cpu, relative_address);
     }
 }
 
-pub fn branch_if_not_equal(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.intersects(CPUFLAGS::ZERO) {
-        branch(context, relative_address);
+pub fn branch_if_not_equal(cpu: &mut MOS6502, relative_address: u8) {
+    if !cpu.is_set(CPUFLAGS::ZERO) {
+        branch(cpu, relative_address);
     }
 }
 
-pub fn branch_if_minus(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.intersects(CPUFLAGS::NEGATIVE) {
-        branch(context, relative_address);
+pub fn branch_if_minus(cpu: &mut MOS6502, relative_address: u8) {
+    if cpu.is_set(CPUFLAGS::NEGATIVE) {
+        branch(cpu, relative_address);
     }
 }
 
-pub fn branch_if_positive(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.intersects(CPUFLAGS::NEGATIVE) {
-        branch(context, relative_address);
+pub fn branch_if_positive(cpu: &mut MOS6502, relative_address: u8) {
+    if !cpu.is_set(CPUFLAGS::NEGATIVE) {
+        branch(cpu, relative_address);
     }
 }
 
-pub fn branch_if_overflow_clear(context: &mut MOS6502, relative_address: u8) {
-    if !context.flags.intersects(CPUFLAGS::OVERFLOW) {
-        branch(context, relative_address);
+pub fn branch_if_overflow_clear(cpu: &mut MOS6502, relative_address: u8) {
+    if !cpu.is_set(CPUFLAGS::OVERFLOW) {
+        branch(cpu, relative_address);
     }
 }
 
-pub fn branch_if_overflow_set(context: &mut MOS6502, relative_address: u8) {
-    if context.flags.intersects(CPUFLAGS::OVERFLOW) {
-        branch(context, relative_address);
+pub fn branch_if_overflow_set(cpu: &mut MOS6502, relative_address: u8) {
+    if cpu.is_set(CPUFLAGS::OVERFLOW) {
+        branch(cpu, relative_address);
     }
 }

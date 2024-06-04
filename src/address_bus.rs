@@ -3,22 +3,29 @@ use std::{fs::File, io::Read};
 
 const MEMORY_SIZE: usize = (u16::MAX as usize) + 1;
 
-pub trait MemoryBus {
+pub trait AddressBus {
     fn read(&mut self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
+    fn peek(&self, address: u16) -> u8;
 }
 
 struct MemoryBank {
     bytes: [u8; MEMORY_SIZE],
 }
 
-impl MemoryBus for MemoryBank {
+impl AddressBus for MemoryBank {
     fn read(&mut self, address: u16) -> u8 {
+        // println!("Read ${:04X}", address);
         self.bytes[address as usize]
     }
 
     fn write(&mut self, address: u16, value: u8) {
+        // println!("Write ${:04X}", address);
         self.bytes[address as usize] = value;
+    }
+
+    fn peek(&self, address: u16) -> u8 {
+        self.bytes[address as usize]
     }
 }
 
@@ -35,7 +42,7 @@ impl MemoryBank {
     }
 }
 
-pub fn memory_from_file(file: &mut File, randomize_unfilled_bytes: bool) -> impl MemoryBus {
+pub fn memory_from_file(file: &mut File, randomize_unfilled_bytes: bool) -> impl AddressBus {
     let mut memory_bank = MemoryBank::new();
     if randomize_unfilled_bytes {
         memory_bank.randomize_memory();

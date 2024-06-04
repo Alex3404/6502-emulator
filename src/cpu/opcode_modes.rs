@@ -78,501 +78,495 @@ pub fn get_addressing_mode(opcode: u8) -> AddressingMode {
     AddressingMode::Implied
 }
 
-pub fn instruction_implied(context: &mut MOS6502, func: &Inst) {
-    implied_1read(context);
-    func(context);
+pub fn instruction_implied(cpu: &mut MOS6502, func: &Inst) {
+    implied_1read(cpu);
+    func(cpu);
 }
 
-pub fn instruction_read(context: &mut MOS6502, addressing_mode: AddressingMode, func: &ReadInst) {
+pub fn instruction_read(cpu: &mut MOS6502, addressing_mode: AddressingMode, func: &ReadInst) {
     match addressing_mode {
-        AddressingMode::Immediate => immediate_1read(context, func),
-        AddressingMode::Relative => immediate_1read(context, func),
-        AddressingMode::Absolute => absolute_3read(context, func),
-        AddressingMode::ZeroPage => zeropage_2read(context, func),
-        AddressingMode::ZeroPageX => zeropagex_3read(context, func),
-        AddressingMode::ZeroPageY => zeropagey_3read(context, func),
-        AddressingMode::AbsoluteX => absolutex_3read(context, func),
-        AddressingMode::AbsoluteY => absolutey_3read(context, func),
-        AddressingMode::IndirectX => indirectx_5read(context, func),
-        AddressingMode::IndirectY => indirecty_5read(context, func),
+        AddressingMode::Immediate => immediate_1read(cpu, func),
+        AddressingMode::Relative => immediate_1read(cpu, func),
+        AddressingMode::Absolute => absolute_3read(cpu, func),
+        AddressingMode::ZeroPage => zeropage_2read(cpu, func),
+        AddressingMode::ZeroPageX => zeropagex_3read(cpu, func),
+        AddressingMode::ZeroPageY => zeropagey_3read(cpu, func),
+        AddressingMode::AbsoluteX => absolutex_3read(cpu, func),
+        AddressingMode::AbsoluteY => absolutey_3read(cpu, func),
+        AddressingMode::IndirectX => indirectx_5read(cpu, func),
+        AddressingMode::IndirectY => indirecty_5read(cpu, func),
         _ => panic!("Invalid instruction read addressing mode!"),
     }
 }
 
-pub fn instruction_write(context: &mut MOS6502, addressing_mode: AddressingMode, func: &WriteInst) {
+pub fn instruction_write(cpu: &mut MOS6502, addressing_mode: AddressingMode, func: &WriteInst) {
     match addressing_mode {
-        AddressingMode::Absolute => absolute_3write(context, func),
-        AddressingMode::ZeroPage => zeropage_2write(context, func),
-        AddressingMode::ZeroPageX => zeropagex_3write(context, func),
-        AddressingMode::ZeroPageY => zeropagey_3write(context, func),
-        AddressingMode::AbsoluteX => absolutex_4write(context, func),
-        AddressingMode::AbsoluteY => absolutey_4write(context, func),
-        AddressingMode::IndirectX => indirectx_5write(context, func),
-        AddressingMode::IndirectY => indirecty_5write(context, func),
+        AddressingMode::Absolute => absolute_3write(cpu, func),
+        AddressingMode::ZeroPage => zeropage_2write(cpu, func),
+        AddressingMode::ZeroPageX => zeropagex_3write(cpu, func),
+        AddressingMode::ZeroPageY => zeropagey_3write(cpu, func),
+        AddressingMode::AbsoluteX => absolutex_4write(cpu, func),
+        AddressingMode::AbsoluteY => absolutey_4write(cpu, func),
+        AddressingMode::IndirectX => indirectx_5write(cpu, func),
+        AddressingMode::IndirectY => indirecty_5write(cpu, func),
         _ => panic!("Invalid instruction write addressing mode!"),
     }
 }
 
 pub fn instruction_read_move_write(
-    context: &mut MOS6502,
+    cpu: &mut MOS6502,
     addressing_mode: AddressingMode,
     func: &ReadWriteInst,
 ) {
     match addressing_mode {
-        AddressingMode::Accumulator => ac1_rmw(context, func),
-        AddressingMode::ZeroPage => zeropage_4rmw(context, func),
-        AddressingMode::ZeroPageX => zeropagex_5rmw(context, func),
-        AddressingMode::Absolute => absolute_5rmw(context, func),
-        AddressingMode::AbsoluteX => absolutex_6rmw(context, func),
+        AddressingMode::Accumulator => ac1_rmw(cpu, func),
+        AddressingMode::ZeroPage => zeropage_4rmw(cpu, func),
+        AddressingMode::ZeroPageX => zeropagex_5rmw(cpu, func),
+        AddressingMode::Absolute => absolute_5rmw(cpu, func),
+        AddressingMode::AbsoluteX => absolutex_6rmw(cpu, func),
         _ => panic!("Invalid instruction read move write addressing mode!"),
     }
 }
 
-fn implied_1read(context: &mut MOS6502) {
-    context.mem.read(context.reg.pc);
-    context.tick();
+fn implied_1read(cpu: &mut MOS6502) {
+    cpu.bus.read(cpu.reg.pc);
+    cpu.tick();
 }
 
-fn immediate_1read(context: &mut MOS6502, func: &ReadInst) {
+fn immediate_1read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let value = context.mem.read(context.reg.pc);
-    context.reg.pc += 1;
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(cpu.reg.pc);
+    cpu.reg.pc += 1;
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn absolute_3read(context: &mut MOS6502, func: &ReadInst) {
+fn absolute_3read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
-    context.reg.pc += 1;
-    context.tick();
+    let address = address | (cpu.bus.read(cpu.reg.pc) as u16) << 8;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
-    let value = context.mem.read(address);
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(address);
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn absolute_3write(context: &mut MOS6502, func: &WriteInst) {
+fn absolute_3write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
-    context.reg.pc += 1;
-    context.tick();
+    let address = address | (cpu.bus.read(cpu.reg.pc) as u16) << 8;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
-    let value = func(context);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address, value);
+    cpu.tick();
 }
 
-fn zeropage_2read(context: &mut MOS6502, func: &ReadInst) {
+fn zeropage_2read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let value = context.mem.read(address);
-    func(context, value); // Perform the operation
-    context.tick();
+    let value = cpu.bus.read(address);
+    func(cpu, value); // Perform the operation
+    cpu.tick();
 }
 
-fn zeropage_2write(context: &mut MOS6502, func: &WriteInst) {
+fn zeropage_2write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let value = func(context);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address, value);
+    cpu.tick();
 }
 
-fn absolutex_3read(context: &mut MOS6502, func: &ReadInst) {
+fn absolutex_3read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
-    let address_x = address + context.reg.ix as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = address | (cpu.bus.read(cpu.reg.pc) as u16) << 8;
+    let address_x = address + cpu.reg.ix as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
     if !same_page(address, address_x) {
-        context.mem.read(address_x - 0x100); // Perform buggy read in previous page
-        context.tick();
+        cpu.bus.read(address_x - 0x100); // Perform buggy read in previous page
+        cpu.tick();
     }
 
     // T3 or T4
-    let value = context.mem.read(address_x);
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(address_x);
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn absolutex_4write(context: &mut MOS6502, func: &WriteInst) {
+fn absolutex_4write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
-    let address_x = address + context.reg.ix as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = address | (cpu.bus.read(cpu.reg.pc) as u16) << 8;
+    let address_x = address + cpu.reg.ix as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
-    context.mem.read((address & 0xFF00) | (address_x & 0x00FF));
-    context.tick();
+    cpu.bus.read((address & 0xFF00) | (address_x & 0x00FF));
+    cpu.tick();
 
     // T4
-    let value = func(context);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address_x, value);
+    cpu.tick();
 }
 
-fn absolutey_3read(context: &mut MOS6502, func: &ReadInst) {
+fn absolutey_3read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
-    let address_y = address + context.reg.iy as u16;
+    let address = address | (cpu.bus.read(cpu.reg.pc) as u16) << 8;
+    let address_y = address + cpu.reg.iy as u16;
 
-    context.reg.pc += 1;
-    context.tick();
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
     if !same_page(address, address_y) {
-        context.mem.read(address_y - 0x100); // Perform buggy read in previous page
-        context.tick();
+        cpu.bus.read(address_y - 0x100); // Perform buggy read in previous page
+        cpu.tick();
     }
 
     // T3 or T4
-    let value = context.mem.read(address_y);
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(address_y);
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn absolutey_4write(context: &mut MOS6502, func: &WriteInst) {
+fn absolutey_4write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
-    let address_y = address + context.reg.iy as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = address | (cpu.bus.read(cpu.reg.pc) as u16) << 8;
+    let address_y = address + cpu.reg.iy as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
-    context.mem.read((address & 0xFF00) | (address_y & 0x00FF));
-    context.tick();
+    cpu.bus.read((address & 0xFF00) | (address_y & 0x00FF));
+    cpu.tick();
 
     // T4
-    let value = func(context);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address_y, value);
+    cpu.tick();
 }
 
-fn zeropagex_3write(context: &mut MOS6502, func: &WriteInst) {
+fn zeropagex_3write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    let address_x = (address + context.reg.ix as u16) & 0xFF;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    let address_x = (address + cpu.reg.ix as u16) & 0xFF;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.mem.read(address);
-    context.tick();
+    cpu.bus.read(address);
+    cpu.tick();
 
     // T3
-    let value = func(context);
-    context.mem.write(address_x, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address_x, value);
+    cpu.tick();
 }
 
-fn zeropagex_3read(context: &mut MOS6502, func: &ReadInst) {
+fn zeropagex_3read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    let address_x = (address + context.reg.ix as u16) & 0xFF;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    let address_x = (address + cpu.reg.ix as u16) & 0xFF;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.mem.read(address);
-    context.tick();
+    cpu.bus.read(address);
+    cpu.tick();
 
     // T3
-    let value = context.mem.read(address_x);
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(address_x);
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn zeropagey_3write(context: &mut MOS6502, func: &WriteInst) {
+fn zeropagey_3write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    let address_y = (address + context.reg.iy as u16) & 0xFF;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    let address_y = (address + cpu.reg.iy as u16) & 0xFF;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.mem.read(address);
-    context.tick();
+    cpu.bus.read(address);
+    cpu.tick();
 
     // T3
-    let value = func(context);
-    context.mem.write(address_y, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address_y, value);
+    cpu.tick();
 }
 
-fn zeropagey_3read(context: &mut MOS6502, func: &ReadInst) {
+fn zeropagey_3read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    let address_y = (address + context.reg.iy as u16) & 0xFF;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    let address_y = (address + cpu.reg.iy as u16) & 0xFF;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.mem.read(address);
-    context.tick();
+    cpu.bus.read(address);
+    cpu.tick();
 
     // T3
-    let value = context.mem.read(address_y);
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(address_y);
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn indirecty_5read(context: &mut MOS6502, func: &ReadInst) {
+fn indirecty_5read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let indirect_address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let zp_address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = context.mem.read(indirect_address) as u16;
-    context.tick();
+    let address = cpu.bus.read(zp_address) as u16;
+    cpu.tick();
 
     // T3
-    let address = address | ((context.mem.read(indirect_address + 1) as u16) << 8);
-    let address_y = address + context.reg.iy as u16;
-    context.tick();
+    let address = address | ((cpu.bus.read((zp_address + 1) & 0xFF) as u16) << 8);
+    let address_y = address + cpu.reg.iy as u16;
+    cpu.tick();
 
     // T4
     if !same_page(address, address_y) {
-        context.mem.read((address & 0xFF00) | (address_y | 0x00FF));
-        context.tick();
+        cpu.bus.read((address & 0xFF00) | (address_y | 0x00FF));
+        cpu.tick();
     }
 
     // T4 or T5
-    let value = context.mem.read(address_y);
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(address_y);
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn indirecty_5write(context: &mut MOS6502, func: &WriteInst) {
+fn indirecty_5write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let indirect_address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let zp_address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = context.mem.read(indirect_address) as u16;
-    context.tick();
+    let address = cpu.bus.read(zp_address) as u16;
+    cpu.tick();
 
     // T3
-    let address = address | ((context.mem.read(indirect_address + 1) as u16) << 8);
-    let address_y = address + context.reg.iy as u16;
-    context.tick();
+    let address = address | ((cpu.bus.read((zp_address + 1) & 0xFF) as u16) << 8);
+    let address_y = address + cpu.reg.iy as u16;
+    cpu.tick();
 
     // T4
-    context.mem.read((address & 0xFF00) | (address_y | 0x00FF));
-    context.tick();
+    cpu.bus.read((address & 0xFF00) | (address_y | 0x00FF));
+    cpu.tick();
 
     // T5
-    let value = func(context);
-    context.mem.write(address_y, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address_y, value);
+    cpu.tick();
 }
 
-fn indirectx_5read(context: &mut MOS6502, func: &ReadInst) {
+fn indirectx_5read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let indirect_address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let indirect_address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.mem.read(indirect_address);
-    context.tick();
+    cpu.bus.read(indirect_address);
+    cpu.tick();
 
     // T3
-    let address = context
-        .mem
-        .read((indirect_address + context.reg.ix as u16) & 0xFF) as u16;
-    context.tick();
+    let zp_address = (indirect_address + cpu.reg.ix as u16) & 0xFF;
+    let address = cpu.bus.read(zp_address) as u16;
+    cpu.tick();
 
     // T4
-    let address = address
-        | context
-            .mem
-            .read((indirect_address + context.reg.ix as u16 + 1) & 0xFF) as u16;
-    context.tick();
+    let zp_address = (indirect_address + cpu.reg.ix as u16 + 1) & 0xFF;
+    let address = address | ((cpu.bus.read(zp_address) as u16) << 8);
+    cpu.tick();
 
     // T5
-    let value = context.mem.read(address);
-    func(context, value);
-    context.tick();
+    let value = cpu.bus.read(address);
+    func(cpu, value);
+    cpu.tick();
 }
 
-fn indirectx_5write(context: &mut MOS6502, func: &WriteInst) {
+fn indirectx_5write(cpu: &mut MOS6502, func: &WriteInst) {
     // T1
-    let indirect_address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let indirect_address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.mem.read(indirect_address);
-    context.tick();
+    cpu.bus.read(indirect_address);
+    cpu.tick();
 
     // T3
-    let address = context
-        .mem
-        .read((indirect_address + context.reg.ix as u16) & 0xFF) as u16;
-    context.tick();
+    let zp_address = (indirect_address + cpu.reg.ix as u16) & 0xFF;
+    let address = cpu.bus.read(zp_address) as u16;
+    cpu.tick();
 
     // T4
-    let address = address
-        | context
-            .mem
-            .read((indirect_address + context.reg.ix as u16 + 1) & 0xFF) as u16;
-    context.tick();
+    let zp_address = (indirect_address + cpu.reg.ix as u16 + 1) & 0xFF;
+    let address = address | ((cpu.bus.read(zp_address) as u16) << 8);
+    cpu.tick();
 
     // T5
-    let value = func(context);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu);
+    cpu.bus.write(address, value);
+    cpu.tick();
 }
 
-fn ac1_rmw(context: &mut MOS6502, func: &ReadWriteInst) {
+fn ac1_rmw(cpu: &mut MOS6502, func: &ReadWriteInst) {
     // T1
-    context.mem.read(context.reg.pc);
-    context.reg.ac = func(context, context.reg.ac);
-    context.tick();
+    cpu.bus.read(cpu.reg.pc);
+    cpu.reg.ac = func(cpu, cpu.reg.ac);
+    cpu.tick();
 }
 
-fn zeropage_4rmw(context: &mut MOS6502, func: &ReadWriteInst) {
+fn zeropage_4rmw(cpu: &mut MOS6502, func: &ReadWriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let value = context.mem.read(address);
-    context.tick();
+    let value = cpu.bus.read(address);
+    cpu.tick();
 
     // T3
-    context.mem.write(address, value);
-    context.tick();
+    cpu.bus.write(address, value);
+    cpu.tick();
 
     // T4
-    let value = func(context, value);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu, value);
+    cpu.bus.write(address, value);
+    cpu.tick();
 }
 
-fn absolute_5rmw(context: &mut MOS6502, func: &ReadWriteInst) {
+fn absolute_5rmw(cpu: &mut MOS6502, func: &ReadWriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | ((context.mem.read(context.reg.pc) as u16) << 8);
-    context.reg.pc += 1;
-    context.tick();
+    let address = address | ((cpu.bus.read(cpu.reg.pc) as u16) << 8);
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
-    let value = context.mem.read(address);
-    context.tick();
+    let value = cpu.bus.read(address);
+    cpu.tick();
 
     // T4
-    context.mem.write(address, value);
-    context.tick();
+    cpu.bus.write(address, value);
+    cpu.tick();
 
     // T5
-    let value = func(context, value);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu, value);
+    cpu.bus.write(address, value);
+    cpu.tick();
 }
 
-fn zeropagex_5rmw(context: &mut MOS6502, func: &ReadWriteInst) {
+fn zeropagex_5rmw(cpu: &mut MOS6502, func: &ReadWriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    let address_x = (address + context.reg.ix as u16) & 0xFF;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    let address_x = (address + cpu.reg.ix as u16) & 0xFF;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    context.mem.read(address);
-    context.tick();
+    cpu.bus.read(address);
+    cpu.tick();
 
     // T3
-    let value = context.mem.read(address_x);
-    context.tick();
+    let value = cpu.bus.read(address_x);
+    cpu.tick();
 
     // T4
-    context.mem.write(address, value);
-    context.tick();
+    cpu.bus.write(address_x, value);
+    cpu.tick();
 
     // T5
-    let value = func(context, value);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu, value);
+    cpu.bus.write(address_x, value);
+    cpu.tick();
 }
 
-fn absolutex_6rmw(context: &mut MOS6502, func: &ReadWriteInst) {
+fn absolutex_6rmw(cpu: &mut MOS6502, func: &ReadWriteInst) {
     // T1
-    let address = context.mem.read(context.reg.pc) as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T2
-    let address = address | (context.mem.read(context.reg.pc) as u16) << 8;
-    let address = address + context.reg.ix as u16;
-    context.reg.pc += 1;
-    context.tick();
+    let address = address | (cpu.bus.read(cpu.reg.pc) as u16) << 8;
+    let address = address + cpu.reg.ix as u16;
+    cpu.reg.pc += 1;
+    cpu.tick();
 
     // T3
-    context.mem.read(address);
-    context.tick();
+    cpu.bus.read(address);
+    cpu.tick();
 
     // T4
-    let value = context.mem.read(address);
-    context.tick();
+    let value = cpu.bus.read(address);
+    cpu.tick();
 
     // T5
-    context.mem.write(address, value);
-    context.tick();
+    cpu.bus.write(address, value);
+    cpu.tick();
 
     // T6
-    let value = func(context, value);
-    context.mem.write(address, value);
-    context.tick();
+    let value = func(cpu, value);
+    cpu.bus.write(address, value);
+    cpu.tick();
 }

@@ -1,48 +1,48 @@
 use crate::cpu::*;
 
-pub fn load_ac(context: &mut MOS6502, value: u8) {
-    context.set_zn(value);
-    context.reg.ac = value;
+pub fn load_ac(cpu: &mut MOS6502, value: u8) {
+    cpu.set_zn(value);
+    cpu.reg.ac = value;
 }
 
-pub fn load_ix(context: &mut MOS6502, value: u8) {
-    context.set_zn(value);
-    context.reg.ix = value;
+pub fn load_ix(cpu: &mut MOS6502, value: u8) {
+    cpu.set_zn(value);
+    cpu.reg.ix = value;
 }
 
-pub fn load_iy(context: &mut MOS6502, value: u8) {
-    context.set_zn(value);
-    context.reg.iy = value;
+pub fn load_iy(cpu: &mut MOS6502, value: u8) {
+    cpu.set_zn(value);
+    cpu.reg.iy = value;
 }
 
-pub fn store_ac(context: &mut MOS6502) -> u8 {
-    context.reg.ac
+pub fn store_ac(cpu: &mut MOS6502) -> u8 {
+    cpu.reg.ac
 }
 
-pub fn store_ix(context: &mut MOS6502) -> u8 {
-    context.reg.ix
+pub fn store_ix(cpu: &mut MOS6502) -> u8 {
+    cpu.reg.ix
 }
 
-pub fn store_iy(context: &mut MOS6502) -> u8 {
-    context.reg.iy
+pub fn store_iy(cpu: &mut MOS6502) -> u8 {
+    cpu.reg.iy
 }
 
-pub fn transfer_ac_to_x(context: &mut MOS6502) {
-    context.reg.ix = context.reg.ac;
-    context.set_zn(context.reg.ac);
+pub fn transfer_ac_to_x(cpu: &mut MOS6502) {
+    cpu.reg.ix = cpu.reg.ac;
+    cpu.set_zn(cpu.reg.ac);
 }
 
-pub fn transfer_ac_to_y(context: &mut MOS6502) {
-    context.reg.iy = context.reg.ac;
-    context.set_zn(context.reg.ac);
+pub fn transfer_ac_to_y(cpu: &mut MOS6502) {
+    cpu.reg.iy = cpu.reg.ac;
+    cpu.set_zn(cpu.reg.ac);
 }
 
-pub fn transfer_x_to_ac(context: &mut MOS6502) {
-    context.reg.ac = context.reg.ix;
-    context.set_zn(context.reg.ac);
+pub fn transfer_x_to_ac(cpu: &mut MOS6502) {
+    cpu.reg.ac = cpu.reg.ix;
+    cpu.set_zn(cpu.reg.ac);
 }
 
-pub fn transfer_y_to_ac(context: &mut MOS6502) {
-    context.reg.ac = context.reg.iy;
-    context.set_zn(context.reg.ac);
+pub fn transfer_y_to_ac(cpu: &mut MOS6502) {
+    cpu.reg.ac = cpu.reg.iy;
+    cpu.set_zn(cpu.reg.ac);
 }

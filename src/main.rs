@@ -3,9 +3,9 @@
 
 use std::fs::File;
 
+mod address_bus;
 mod cpu;
 mod disassembler;
-mod memory;
 mod tests;
 
 const TEST_FILE_PATH: &str = "tests\\6502_functional_test.bin";
@@ -13,16 +13,20 @@ const TEST_FILE_PATH: &str = "tests\\6502_functional_test.bin";
 fn main() {
     let mut file = File::open(TEST_FILE_PATH).unwrap();
 
-    let memory = memory::memory_from_file(&mut file, true);
+    let memory = address_bus::memory_from_file(&mut file, true);
 
     let mut cpu = cpu::MOS6502::new(Box::new(memory));
     cpu.reset();
     cpu.set_pc(0x400);
     loop {
-        let disassembly = disassembler::disassemble_instruction(&mut cpu.mem, cpu.reg.pc);
-        if let Some(str) = disassembly {
-            println!("Executing {}", str)
-        }
+        // Commented out because it slows the cpu by alot
+        // let disassembly = disassembler::disassemble_instruction(&mut cpu.mem, cpu.reg.pc);
+        // if let Some(str) = disassembly {
+        //     println!(
+        //         "A: {:02X} X: {:02X} Y: {:02X} | {}",
+        //         cpu.reg.ac, cpu.reg.ix, cpu.reg.iy, str
+        //     )
+        // }
 
         cpu.step();
         if cpu.is_trapped() {
