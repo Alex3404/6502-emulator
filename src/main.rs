@@ -20,7 +20,7 @@ fn main() {
     cpu.set_pc(0x400);
     loop {
         // Commented out because it slows the cpu by alot
-        // let disassembly = disassembler::disassemble_instruction(&mut cpu.mem, cpu.reg.pc);
+        // let disassembly = disassembler::disassemble_instruction(&mut cpu.bus, cpu.reg.pc);
         // if let Some(str) = disassembly {
         //     println!(
         //         "A: {:02X} X: {:02X} Y: {:02X} | {}",
