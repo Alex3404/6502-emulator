@@ -2,12 +2,12 @@ use crate::cpu::*;
 
 pub fn jmp_absolute(cpu: &mut MOS6502) {
     // T1
-    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    let address = cpu.read(cpu.reg.pc) as u16;
     cpu.reg.pc += 1;
     cpu.tick();
 
     // T2
-    let address = address | ((cpu.bus.read(cpu.reg.pc) as u16) << 8);
+    let address = address | ((cpu.read(cpu.reg.pc) as u16) << 8);
 
     if address + 2 == cpu.reg.pc {
         cpu.trapped();
@@ -21,17 +21,17 @@ pub fn jmp_absolute(cpu: &mut MOS6502) {
 
 pub fn jmp_indirect(cpu: &mut MOS6502) {
     // T1
-    let indirect_address = cpu.bus.read(cpu.reg.pc) as u16;
+    let indirect_address = cpu.read(cpu.reg.pc) as u16;
     cpu.reg.pc += 1;
     cpu.tick();
 
     // T2
-    let indirect_address = indirect_address | ((cpu.bus.read(cpu.reg.pc) as u16) << 8);
+    let indirect_address = indirect_address | ((cpu.read(cpu.reg.pc) as u16) << 8);
     cpu.reg.pc += 1;
     cpu.tick();
 
     // T3
-    let address = cpu.bus.read(indirect_address) as u16;
+    let address = cpu.read(indirect_address) as u16;
 
     // T4
     // See https://www.nesdev.org/obelisk-6502-guide/reference.html
@@ -42,14 +42,14 @@ pub fn jmp_indirect(cpu: &mut MOS6502) {
     // ensure the indirect vector is not at the end of the page.
 
     // I'm going to use the 65SC02 version in the sake of simplicity
-    let address = address | ((cpu.bus.read(indirect_address + 1) as u16) << 8);
+    let address = address | ((cpu.read(indirect_address + 1) as u16) << 8);
     cpu.reg.pc = address;
     cpu.tick();
 }
 
 pub fn jump_to_subroutine(cpu: &mut MOS6502) {
     // T1
-    let address = cpu.bus.read(cpu.reg.pc) as u16;
+    let address = cpu.read(cpu.reg.pc) as u16;
     cpu.reg.pc += 1; // Only increment by 1 (and the instruction is 3) because we push the next pc - 1
     cpu.tick();
 
@@ -66,14 +66,14 @@ pub fn jump_to_subroutine(cpu: &mut MOS6502) {
     cpu.tick();
 
     // T5
-    let address = address | ((cpu.bus.read(cpu.reg.pc) as u16) << 8);
+    let address = address | ((cpu.read(cpu.reg.pc) as u16) << 8);
     cpu.reg.pc = address;
     cpu.tick();
 }
 
 pub fn return_from_subroutine(cpu: &mut MOS6502) {
     // T1
-    cpu.bus.read(cpu.reg.pc);
+    cpu.read(cpu.reg.pc);
     cpu.tick();
     // T2
     cpu.stack_peek();
@@ -87,7 +87,7 @@ pub fn return_from_subroutine(cpu: &mut MOS6502) {
     let address = address | ((cpu.stack_peek() as u16) << 8);
     cpu.tick();
     // T5
-    cpu.bus.read(address);
+    cpu.read(address);
     cpu.reg.pc = address + 1;
     cpu.tick();
 }
@@ -112,39 +112,9 @@ pub fn return_from_interrupt(cpu: &mut MOS6502) {
     cpu.tick();
 }
 
-pub fn break_interrupt(cpu: &mut MOS6502) {
-    // T1
-    cpu.bus.read(cpu.reg.pc);
-    cpu.reg.pc += 1;
-    cpu.tick();
-
-    // T2
-    cpu.stack_push((cpu.reg.pc >> 8) as u8);
-    cpu.tick();
-
-    // T3
-    cpu.stack_push(cpu.reg.pc as u8);
-    cpu.tick();
-
-    // T4
-    cpu.push_processor_status();
-    cpu.set(CPUFLAGS::BREAK, true);
-    cpu.set(CPUFLAGS::INT_DISABLE, true);
-    cpu.tick();
-
-    // T5
-    let address = cpu.bus.read(IRQ_VECTOR) as u16;
-    cpu.tick();
-
-    // T6
-    let address = address | (cpu.bus.read(IRQ_VECTOR + 1) as u16) << 8;
-    cpu.reg.pc = address;
-    cpu.tick();
-}
-
 pub fn branch(cpu: &mut MOS6502, relative_offset: u8) {
     // T1
-    cpu.bus.read(cpu.reg.pc);
+    cpu.read(cpu.reg.pc);
     cpu.tick();
 
     let old_pc = cpu.reg.pc;
@@ -159,7 +129,7 @@ pub fn branch(cpu: &mut MOS6502, relative_offset: u8) {
 
     if !same_page(cpu.reg.pc, new_pc) {
         // T2
-        cpu.bus.read((old_pc & 0xFF00) | (new_pc & 0x00FF));
+        cpu.read((old_pc & 0xFF00) | (new_pc & 0x00FF));
         cpu.tick();
     }
 

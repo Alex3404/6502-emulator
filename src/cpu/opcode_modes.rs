@@ -148,13 +148,13 @@ pub fn instruction_read_move_write(
 }
 
 fn implied_1read(cpu: &mut MOS6502) {
-    cpu.bus.read(cpu.reg.pc);
+    cpu.read(cpu.reg.pc);
     cpu.tick();
 }
 
 fn immediate_1read(cpu: &mut MOS6502, func: &ReadInst) {
     // T1
-    let value = cpu.bus.read(cpu.reg.pc);
+    let value = cpu.read(cpu.reg.pc);
     cpu.reg.pc += 1;
     func(cpu, value);
     cpu.tick();

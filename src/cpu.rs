@@ -13,8 +13,11 @@ mod transfer_load_store_instructions;
 
 use crate::address_bus::AddressBus;
 
+pub const NMI_VECTOR: u16 = 0xFFFA;
 pub const RESET_VECTOR: u16 = 0xFFFC;
 pub const IRQ_VECTOR: u16 = 0xFFFE;
+pub const BRK_VECTOR: u16 = 0xFFFE;
+
 pub const STACK_BASE: u16 = 0x100;
 
 bitflags! {
@@ -34,18 +37,33 @@ bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub struct MOS6502Registers {
-    pub pc: u16,
-    pub sp: u8,
-    pub ac: u8,
-    pub ix: u8,
-    pub iy: u8,
-    pub status: CPUFLAGS,
+    pub pc: u16,      // Program Counter
+    pub sp: u8,       // Stack Pointer
+    pub ac: u8,       // Accumulator
+    pub ix: u8,       // Index X
+    pub iy: u8,       // Index Y
+    pub ps: CPUFLAGS, // Process Status
+}
+
+impl Default for MOS6502Registers {
+    fn default() -> Self {
+        Self {
+            pc: 0,
+            sp: 0xFF,
+            ac: 0,
+            ix: 0,
+            iy: 0,
+            ps: CPUFLAGS::UNUSED,
+        }
+    }
 }
 
 pub struct MOS6502 {
     pub reg: MOS6502Registers,
     pub bus: Box<dyn AddressBus>,
+
     trapped: bool,
     last_clock: Instant,
 }
@@ -55,29 +73,108 @@ pub fn same_page(addr1: u16, addr2: u16) -> bool {
 }
 
 #[allow(dead_code)]
+#[derive(PartialEq)]
+pub enum InterruptType {
+    Nmi,
+    Irq,
+    Brk,
+    Reset,
+}
+
+#[allow(dead_code)]
 impl MOS6502 {
     pub fn new(memory: Box<dyn AddressBus>) -> Self {
         Self {
-            reg: MOS6502Registers {
-                pc: 0,
-                sp: 0xFF,
-                ac: 0,
-                ix: 0,
-                iy: 0,
-                status: CPUFLAGS::UNUSED,
-            },
             bus: memory,
             last_clock: Instant::now(),
             trapped: false,
+            reg: MOS6502Registers::default(),
         }
     }
 
+    pub fn interrupt(&mut self, interrupt: InterruptType) {
+        if interrupt == InterruptType::Reset {
+            self.reg.sp = 0x00;
+            self.set(CPUFLAGS::ZERO, true);
+            // T1
+            self.stack_peek();
+            self.stack_push_no_read();
+            self.tick();
+            // T2
+            self.stack_peek();
+            self.stack_push_no_read();
+            self.tick();
+            // T3
+            self.set(CPUFLAGS::INT_DISABLE, true);
+            self.stack_peek();
+            self.stack_push_no_read();
+            self.tick();
+            // T4
+            let address = self.read(RESET_VECTOR) as u16;
+            self.tick();
+            // T5
+            let address = address | ((self.read(RESET_VECTOR + 1) as u16) << 8);
+            self.set(CPUFLAGS::BREAK, true);
+            self.reg.pc = address;
+            self.tick();
+
+            return;
+        }
+
+        // T1
+        self.read(self.reg.pc);
+        self.reg.pc += 1;
+        self.tick();
+
+        // Pushes PC and Status
+        // T2
+        self.stack_push((self.reg.pc >> 8) as u8);
+        self.tick();
+
+        // T3
+        self.stack_push(self.reg.pc as u8);
+        self.tick();
+
+        // T4
+        if interrupt == InterruptType::Brk {
+            self.set(CPUFLAGS::BREAK, true);
+        }
+        let flags = self.reg.ps | CPUFLAGS::UNUSED;
+        self.stack_push(flags.bits());
+        self.set(CPUFLAGS::INT_DISABLE, true);
+        self.tick();
+
+        let vector = match interrupt {
+            InterruptType::Brk => BRK_VECTOR,
+            InterruptType::Irq => IRQ_VECTOR,
+            InterruptType::Nmi => NMI_VECTOR,
+            InterruptType::Reset => RESET_VECTOR,
+        };
+
+        // T5
+        let address = self.read(vector) as u16;
+        self.tick();
+
+        // T6
+        let address = address | (self.read(vector + 1) as u16) << 8;
+        self.reg.pc = address;
+        self.tick();
+    }
+
+    fn read(&mut self, address: u16) -> u8 {
+        self.bus.read(address)
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        self.bus.write(address, value);
+    }
+
     fn set(&mut self, flag: CPUFLAGS, value: bool) {
-        self.reg.status.set(flag, value);
+        self.reg.ps.set(flag, value);
     }
 
     fn is_set(&mut self, flag: CPUFLAGS) -> bool {
-        self.reg.status.intersects(flag)
+        self.reg.ps.intersects(flag)
     }
 
     fn trapped(&mut self) {
@@ -93,22 +190,19 @@ impl MOS6502 {
         self.reg.pc = address;
     }
 
-    pub fn execute(&mut self, start_address: u16) {
-        self.reset();
-        self.reg.pc = start_address;
-
+    pub fn execute(&mut self) {
         loop {
             self.step();
         }
     }
 
     fn stack_peek(&mut self) -> u8 {
-        self.bus.read(STACK_BASE + self.reg.sp as u16)
+        self.read(STACK_BASE + self.reg.sp as u16)
     }
 
     #[allow(dead_code)]
     fn stack_write(&mut self, value: u8) {
-        self.bus.write(STACK_BASE + self.reg.sp as u16, value);
+        self.write(STACK_BASE + self.reg.sp as u16, value);
     }
 
     fn stack_pop_no_read(&mut self) {
@@ -121,30 +215,23 @@ impl MOS6502 {
     }
 
     fn stack_push(&mut self, value: u8) {
-        self.bus.write(STACK_BASE + self.reg.sp as u16, value);
+        self.write(STACK_BASE + self.reg.sp as u16, value);
         self.reg.sp = unsafe { self.reg.sp.unchecked_sub(1) };
     }
 
     #[allow(dead_code)]
     fn stack_pop(&mut self) -> u8 {
         self.reg.sp = unsafe { self.reg.sp.unchecked_add(1) };
-        self.bus.read(STACK_BASE + self.reg.sp as u16)
-    }
-
-    pub fn reset(&mut self) {
-        self.reg.sp = 0x00;
-        self.reg.pc =
-            self.bus.read(RESET_VECTOR) as u16 | ((self.bus.read(RESET_VECTOR + 1) as u16) << 8);
-        self.reg.status |= CPUFLAGS::INT_DISABLE;
+        self.read(STACK_BASE + self.reg.sp as u16)
     }
 
     fn push_processor_status(&mut self) {
-        let flags = self.reg.status | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
+        let flags = self.reg.ps | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
         self.stack_push(flags.bits());
     }
 
     fn set_proccessor_status(&mut self, value: u8) {
-        self.reg.status = CPUFLAGS::from_bits_truncate(value) | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
+        self.reg.ps = CPUFLAGS::from_bits_truncate(value) | CPUFLAGS::UNUSED | CPUFLAGS::BREAK;
     }
 
     fn tick(&mut self) {
@@ -173,13 +260,13 @@ impl MOS6502 {
         use transfer_load_store_instructions::*;
 
         // T1
-        let opcode: u8 = self.bus.read(self.reg.pc);
+        let opcode: u8 = self.read(self.reg.pc);
         self.reg.pc = (self.reg.pc as u32 + 1) as u16;
         self.tick();
 
         let mode = opcode_modes::get_addressing_mode(opcode);
         match opcode {
-            0x0 => break_interrupt(self), // Custom preface no instruction_implied() used
+            0x0 => self.interrupt(InterruptType::Brk), // Custom preface no instruction_implied() used
             0x40 => instruction_implied(self, &return_from_interrupt),
             0xEA => (),
 

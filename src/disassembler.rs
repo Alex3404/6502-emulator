@@ -199,16 +199,16 @@ pub fn decode_paramaters(
         AddressingMode::Accumulator => String::from(""),
 
         AddressingMode::Immediate => {
-            format!("#${:02X}", memory.peek(address + 1))
+            format!("#${:02X}", memory.read(address + 1))
         }
         AddressingMode::IndirectX => {
-            format!("(${:02X},X)", memory.peek(address + 1))
+            format!("(${:02X},X)", memory.read(address + 1))
         }
         AddressingMode::IndirectY => {
-            format!("(${:02X}),Y", memory.peek(address + 1))
+            format!("(${:02X}),Y", memory.read(address + 1))
         }
         AddressingMode::Relative => {
-            let relative_offset = memory.peek(address + 1);
+            let relative_offset = memory.read(address + 1);
             let offset = i16::from(relative_offset as i8) + 2;
             match offset {
                 0 => {
@@ -227,44 +227,44 @@ pub fn decode_paramaters(
             }
         }
         AddressingMode::ZeroPage => {
-            format!("${:X}", memory.peek(address + 1))
+            format!("${:X}", memory.read(address + 1))
         }
         AddressingMode::ZeroPageX => {
-            format!("${:X},X", memory.peek(address + 1))
+            format!("${:X},X", memory.read(address + 1))
         }
         AddressingMode::ZeroPageY => {
-            format!("${:X},Y", memory.peek(address + 1))
+            format!("${:X},Y", memory.read(address + 1))
         }
 
         AddressingMode::Absolute => {
             format!(
                 "${:X}",
-                memory.peek(address + 1) as u16 | ((memory.peek(address + 2) as u16) << 8)
+                memory.read(address + 1) as u16 | ((memory.read(address + 2) as u16) << 8)
             )
         }
         AddressingMode::AbsoluteX => {
             format!(
                 "${:X},X",
-                memory.peek(address + 1) as u16 | ((memory.peek(address + 2) as u16) << 8)
+                memory.read(address + 1) as u16 | ((memory.read(address + 2) as u16) << 8)
             )
         }
         AddressingMode::AbsoluteY => {
             format!(
                 "${:X},Y",
-                memory.peek(address + 1) as u16 | ((memory.peek(address + 2) as u16) << 8)
+                memory.read(address + 1) as u16 | ((memory.read(address + 2) as u16) << 8)
             )
         }
         AddressingMode::Indirect => {
             format!(
                 "$({:X})",
-                memory.peek(address + 1) as u16 | ((memory.peek(address + 2) as u16) << 8)
+                memory.read(address + 1) as u16 | ((memory.read(address + 2) as u16) << 8)
             )
         }
     }
 }
 
 pub fn disassemble_instruction(memory: &mut Box<dyn AddressBus>, address: u16) -> Option<String> {
-    let opcode = memory.peek(address);
+    let opcode = memory.read(address);
     let instruction_data = match INSTRUCTIONS.get(&opcode) {
         Some(data) => data,
         None => {
@@ -280,7 +280,7 @@ pub fn disassemble_instruction(memory: &mut Box<dyn AddressBus>, address: u16) -
 
     let mut byte_column = format!("${:04X} | ", address);
     for i in 0..instruction_length(mode) {
-        byte_column += format!("{:02X} ", memory.peek(address + i as u16)).as_str();
+        byte_column += format!("{:02X} ", memory.read(address + i as u16)).as_str();
     }
     while byte_column.len() < 17 {
         byte_column.push(' ');

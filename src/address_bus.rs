@@ -6,7 +6,6 @@ const MEMORY_SIZE: usize = (u16::MAX as usize) + 1;
 pub trait AddressBus {
     fn read(&mut self, address: u16) -> u8;
     fn write(&mut self, address: u16, value: u8);
-    fn peek(&self, address: u16) -> u8;
 }
 
 struct MemoryBank {
@@ -15,17 +14,11 @@ struct MemoryBank {
 
 impl AddressBus for MemoryBank {
     fn read(&mut self, address: u16) -> u8 {
-        // println!("Read ${:04X}", address);
         self.bytes[address as usize]
     }
 
     fn write(&mut self, address: u16, value: u8) {
-        // println!("Write ${:04X}", address);
         self.bytes[address as usize] = value;
-    }
-
-    fn peek(&self, address: u16) -> u8 {
-        self.bytes[address as usize]
     }
 }
 
